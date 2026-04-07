@@ -5,6 +5,7 @@ import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
+import { ConnectWallet } from "./ConnectWallet";
 
 export function Topbar() {
   const { theme, setTheme } = useTheme();
@@ -47,6 +48,7 @@ export function Topbar() {
           <Button asChild>
             <Link href="/api-keys">Create API Key</Link>
           </Button>
+          <ConnectWallet />
         </div>
       </div>
     </header>
