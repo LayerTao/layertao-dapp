@@ -1,0 +1,52 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="900" fill="#0A0B0C"/>
+  <rect width="1600" height="900" fill="url(#bgFade)"/>
+
+  <g opacity="0.78">
+    <path d="M-120 260C60 220 210 218 352 262C494 306 624 388 770 396C922 404 1046 316 1172 282C1304 246 1452 254 1718 338" stroke="#111214" stroke-width="4"/>
+    <path d="M-120 290C44 248 210 248 350 292C490 336 626 420 774 430C920 440 1048 346 1170 314C1306 278 1458 292 1718 372" stroke="#121315" stroke-width="4"/>
+    <path d="M-120 320C44 278 212 280 350 324C488 368 628 452 778 462C920 470 1052 378 1168 346C1308 310 1462 326 1718 406" stroke="#141517" stroke-width="4"/>
+    <path d="M-120 350C48 308 216 314 352 356C488 398 632 482 782 492C922 500 1058 410 1172 378C1312 342 1468 360 1718 438" stroke="#161719" stroke-width="4"/>
+    <path d="M-120 380C54 340 220 346 358 388C496 430 638 512 788 522C928 530 1066 442 1182 410C1318 374 1474 394 1718 472" stroke="#18191C" stroke-width="4"/>
+  </g>
+
+  <g opacity="0.62">
+    <path d="M-120 666C88 570 278 542 444 584C610 626 742 722 888 738C1032 754 1148 704 1258 654C1374 602 1498 586 1718 622" stroke="#0F1012" stroke-width="5"/>
+    <path d="M-120 706C82 610 274 584 442 626C610 668 744 762 892 778C1038 794 1156 742 1266 692C1384 638 1506 624 1718 660" stroke="#111214" stroke-width="5"/>
+    <path d="M-120 746C80 650 274 626 444 668C614 710 748 802 898 818C1044 834 1164 780 1276 730C1390 676 1510 662 1718 698" stroke="#141518" stroke-width="5"/>
+    <path d="M-120 786C82 690 278 670 450 710C622 750 758 842 906 856C1052 870 1174 816 1286 768C1398 720 1518 704 1718 734" stroke="#17181B" stroke-width="5"/>
+    <path d="M-120 826C88 732 286 712 460 750C634 788 772 878 922 890C1068 902 1190 850 1300 804C1410 756 1528 742 1718 770" stroke="#1A1B1E" stroke-width="5"/>
+  </g>
+
+  <g filter="url(#haze)">
+    <ellipse cx="1020" cy="500" rx="520" ry="88" fill="white" fill-opacity="0.18"/>
+    <ellipse cx="1100" cy="520" rx="680" ry="130" fill="white" fill-opacity="0.1"/>
+  </g>
+
+  <g opacity="0.22">
+    <path d="M714 170C808 204 888 240 964 298" stroke="#F6F6F4" stroke-width="3"/>
+    <path d="M780 152C872 194 944 238 1014 294" stroke="#F6F6F4" stroke-width="3"/>
+    <path d="M842 138C930 186 1000 236 1062 294" stroke="#F6F6F4" stroke-width="3"/>
+    <path d="M904 128C988 180 1054 236 1114 296" stroke="#F6F6F4" stroke-width="3"/>
+    <path d="M966 122C1048 178 1112 238 1170 304" stroke="#F6F6F4" stroke-width="3"/>
+  </g>
+
+  <rect width="1600" height="900" fill="url(#edgeFade)"/>
+
+  <defs>
+    <linearGradient id="bgFade" x1="800" y1="0" x2="800" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#040506"/>
+      <stop offset="0.55" stop-color="#101113"/>
+      <stop offset="1" stop-color="#292A2C"/>
+    </linearGradient>
+    <radialGradient id="edgeFade" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1068 486) rotate(157.47) scale(1301.12 874.141)">
+      <stop offset="0.28" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.46"/>
+    </radialGradient>
+    <filter id="haze" x="320" y="222" width="1560" height="576" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+      <feGaussianBlur stdDeviation="60" result="effect1_foregroundBlur"/>
+    </filter>
+  </defs>
+</svg>
