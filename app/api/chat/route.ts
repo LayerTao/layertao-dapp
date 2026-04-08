@@ -1,0 +1,32 @@
+// app/api/chat/route.ts
+import OpenAI from "openai";
+import { NextResponse } from "next/server";
+
+const client = new OpenAI({
+  apiKey: process.env.CHUTES_API_KEY,
+  baseURL: process.env.CHUTES_BASE_URL,
+});
+
+export async function POST(req: Request) {
+  try {
+    const { messages } = await req.json();
+
+    const response = await client.chat.completions.create({
+      model: process.env.CHUTES_MODEL || "deepseek-ai/DeepSeek-V3.1-Terminus-TEE", 
+      messages: messages,
+      max_tokens: 500,
+      temperature: 0.7,
+    });
+
+    return NextResponse.json({ 
+      reply: response.choices[0].message.content 
+    });
+
+  } catch (error) {
+    console.error("Chutes API Error:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch response from Chutes." }, 
+      { status: 500 }
+    );
+  }
+}
