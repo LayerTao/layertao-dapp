@@ -9,10 +9,17 @@ import {
   CheckCircle2, 
   Image as ImageIcon,
   Loader2,
-  Network // <-- The ONLY fallback icon we need now
+  Network
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -22,7 +29,16 @@ type Message = {
   content: string;
 };
 
-// --- THE NEW STRIPPED DOWN ICON COMPONENT ---
+// --- PRE-FORMATTED MODEL LIST ---
+const availableModels = [
+  { id: "Qwen/Qwen3-32B-TEE", company: "Qwen", name: "Qwen3-32B-TEE" },
+  { id: "openai/gpt-oss-120b-TEE", company: "OpenAI", name: "gpt-oss-120b-TEE" },
+  { id: "deepseek-ai/DeepSeek-V3.1-TEE", company: "DeepSeek", name: "DeepSeek-V3.1-TEE" },
+  { id: "moonshotai/Kimi-K2.5-TEE", company: "Moonshot AI", name: "Kimi-K2.5-TEE" },
+  { id: "MiniMaxAI/MiniMax-M2.5-TEE", company: "MiniMax", name: "MiniMax-M2.5-TEE" },
+  { id: "chutesai/Mistral-Small-3.1-24B-Instruct-2503-TEE", company: "Chutes AI", name: "Mistral-Small-3.1-24B-Instruct-2503-TEE" },
+];
+
 function SubnetIcon({ 
   iconString, 
   className 
@@ -32,12 +48,10 @@ function SubnetIcon({
 }) {
   const [hasError, setHasError] = useState(false);
 
-  // If you pass "default" OR if the SVG fails to load, just show the Network icon
   if (iconString === "default" || hasError) {
     return <Network className={className} />;
   }
 
-  // Otherwise, try to load the SVG
   return (
     <img 
       src={`/assets/subnets/${iconString}.svg`}
@@ -47,23 +61,21 @@ function SubnetIcon({
     />
   );
 }
-// ---------------------------------------------
 
 export function Playground() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeSubnet, setActiveSubnet] = useState("subnet-01");
+  const [selectedModel, setSelectedModel] = useState(availableModels[0].id);
 
-  // --- UPDATED OPTIONS ---
-  // Just use the string. "default" triggers the Network icon. Anything else triggers the SVG.
   const subnetOptions = [
     {
       id: "subnet-01",
       title: "Chutes AI",
       subtitle: "Deep Reasoning",
       description: "Designed for complex AI workloads requiring deeper context and multi-step thinking.",
-      iconString: "chutes-ai", // Will try to load /assets/subnets/chutes-ai.svg
+      iconString: "chutes-ai", 
       available: true,
     },
     {
@@ -71,7 +83,7 @@ export function Playground() {
       title: "Subnet 02",
       subtitle: "Reasoning workloads",
       description: "Designed for longer context windows and more complex tasks.",
-      iconString: "default", // Instantly loads the Lucide Network icon
+      iconString: "default", 
       available: false,
     },
     {
@@ -79,7 +91,7 @@ export function Playground() {
       title: "Subnet 03",
       subtitle: "Specialized agents",
       description: "Best for agentic flows, orchestration, and domain-specific tools.",
-      iconString: "default", // Instantly loads the Lucide Network icon
+      iconString: "default", 
       available: false,
     },
   ];
@@ -98,7 +110,9 @@ export function Playground() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // PASS THE SELECTED MODEL ALONG WITH THE MESSAGES
         body: JSON.stringify({ 
+          model: selectedModel,
           messages: [
             { role: "system", "content": "You are a helpful AI assistant." },
             ...newMessages
@@ -132,15 +146,6 @@ export function Playground() {
             Build across subnets
           </h1>
         </div>
-
-        {/* <div className="flex items-center gap-2">
-          <Button variant="outline" className="h-10 border-border bg-background shadow-sm px-5">
-            <Save className="mr-2 h-4 w-4" /> Save Draft
-          </Button>
-          <Button className="h-10 px-6 shadow-sm">
-            <Play className="mr-2 h-4 w-4 fill-current" /> Run Playground
-          </Button>
-        </div> */}
       </div>
 
       {/* Network Selection Section */}
@@ -216,16 +221,12 @@ export function Playground() {
               </div>
               <div className="mt-4">
                 <div className="flex items-center gap-2 mb-1">
-                  
-                  {/* --- USING THE NEW ICON COMPONENT --- */}
                   <SubnetIcon 
                     iconString={option.iconString}
                     className={`h-4 w-4 transition-colors ${
                       activeSubnet === option.id ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
                     }`} 
                   />
-                  {/* ------------------------------------ */}
-
                   <h3 className={`text-sm font-semibold tracking-tight ${
                     activeSubnet === option.id ? "text-primary" : "text-foreground"
                   }`}>
@@ -255,9 +256,35 @@ export function Playground() {
                 Compose prompts and test subnet behavior in one place.
               </p>
             </div>
-            <div className="flex items-center gap-1.5 rounded-full border border-healthy/20 bg-healthy/10 px-2.5 py-1 text-[10px] font-bold text-healthy uppercase tracking-wider">
-              <CheckCircle2 className="h-3 w-3" /> Ready
+            
+            {/* --- MODEL DROPDOWN INTEGRATED HERE --- */}
+            <div className="flex items-center gap-3">
+              <Select value={selectedModel} onValueChange={setSelectedModel}>
+                <SelectTrigger className="!h-11 w-[240px] bg-background border-border/50 shadow-sm text-xs focus:ring-primary/20">
+                  <SelectValue placeholder="Select a model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableModels.map((model) => (
+                    <SelectItem key={model.id} value={model.id} className="py-2 cursor-pointer">
+                      <div className="flex flex-col items-start gap-0.5">
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+                          {model.company}
+                        </span>
+                        <span className="font-semibold text-foreground text-[13px]">
+                          {model.name}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <div className="flex items-center gap-1.5 rounded-full border border-healthy/20 bg-healthy/10 px-2.5 py-1 text-[10px] font-bold text-healthy uppercase tracking-wider shrink-0">
+                <CheckCircle2 className="h-3 w-3" /> Ready
+              </div>
             </div>
+            {/* -------------------------------------- */}
+
           </div>
 
           <div className="flex-1 p-6 flex flex-col gap-6">

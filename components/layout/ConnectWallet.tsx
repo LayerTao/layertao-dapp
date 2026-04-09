@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAccount, useConnect, useDisconnect, useBalance } from "wagmi";
+import { useAccount, useDisconnect, useBalance } from "wagmi";
+import { useAppKit } from "@reown/appkit/react";
 import { formatUnits } from "viem";
 import { ChevronDown, RefreshCw, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ import {
 
 export function ConnectWallet() {
   const { isConnected, address, connector } = useAccount();
-  const { connect, connectors, isPending } = useConnect();
+  const { open } = useAppKit();
   const { disconnect } = useDisconnect();
   const { data: ethBalance, refetch: refetchEth } = useBalance({ address });
 
@@ -26,14 +27,7 @@ export function ConnectWallet() {
   }, []);
 
   const handleConnect = () => {
-    const injected = connectors.find(
-      (c) => c.id === "injected" || c.id === "metaMask"
-    );
-    if (injected) {
-      connect({ connector: injected });
-    } else if (connectors.length > 0) {
-      connect({ connector: connectors[0] });
-    }
+    open();
   };
 
   if (!mounted) return <Button variant="outline">Connect Wallet</Button>;
@@ -42,10 +36,9 @@ export function ConnectWallet() {
     return (
       <Button
         onClick={handleConnect}
-        disabled={isPending}
         className="font-display tracking-[0.06rem]"
       >
-        {isPending ? "Connecting..." : "Connect Wallet"}
+        Connect Wallet
       </Button>
     );
   }

@@ -6,6 +6,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { Providers } from "@/components/Providers";
+import { headers } from "next/headers";
 
 // 1. Change variable to --font-sans
 const inter = Inter({
@@ -25,11 +26,14 @@ export const metadata: Metadata = {
   description: "Manage API keys, billing, and usage.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const headersList = await headers();
+  const cookies = headersList.get("cookie");
+
   return (
     <html
       lang="en"
@@ -49,7 +53,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Providers>
+          <Providers cookies={cookies}>
             <div className="grid min-h-screen md:grid-cols-[260px_1fr]">
               {/* Left Sidebar Fixed */}
               <div className="hidden border-r border-border bg-background md:block">

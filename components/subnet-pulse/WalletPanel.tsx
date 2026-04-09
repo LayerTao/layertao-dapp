@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useAccount, useConnect, useDisconnect, useBalance } from 'wagmi';
+import { useAccount, useDisconnect, useBalance } from 'wagmi';
+import { useAppKit } from '@reown/appkit/react';
 import { formatUnits } from 'viem';
 
 export function WalletPanel() {
   const { isConnected, address, connector } = useAccount();
-  const { connect, connectors, isPending } = useConnect();
+  const { open } = useAppKit();
   const { disconnect } = useDisconnect();
 
   const { data: ethBalance } = useBalance({ address });
@@ -15,13 +16,7 @@ export function WalletPanel() {
   const connected = mounted && isConnected;
 
   const handleConnect = () => {
-    // connect with the first available connector, like MetaMask
-    const injected = connectors.find((c) => c.id === 'injected' || c.id === 'metaMask');
-    if (injected) {
-      connect({ connector: injected });
-    } else if (connectors.length > 0) {
-      connect({ connector: connectors[0] });
-    }
+    open();
   };
 
   return (
@@ -37,10 +32,9 @@ export function WalletPanel() {
           {!connected ? (
             <button 
               onClick={handleConnect}
-              disabled={isPending}
               className="bg-secondary border border-border text-foreground font-sans font-semibold text-sm rounded-[18px] px-5 py-3 hover:-translate-y-[1px] transition-transform disabled:opacity-50"
             >
-              {isPending ? 'Connecting...' : 'Connect Wallet'}
+              Connect Wallet
             </button>
           ) : (
             <button 

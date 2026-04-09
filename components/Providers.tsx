@@ -1,27 +1,45 @@
-'use client';
+'use client'
 
-import { WagmiProvider, createConfig, http } from 'wagmi';
-import { mainnet } from 'wagmi/chains';
-import { injected } from 'wagmi/connectors';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactNode } from 'react';
+import { wagmiAdapter, projectId } from '@/lib/config/wagmi'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { createAppKit } from '@reown/appkit/react'
+import { mainnet } from '@reown/appkit/networks'
+import React, { type ReactNode } from 'react'
+import { cookieToInitialState, WagmiProvider, type Config } from 'wagmi'
 
-const config = createConfig({
-  chains: [mainnet],
-  connectors: [injected()],
-  transports: {
-    [mainnet.id]: http(),
-  },
-});
+// Set up queryClient
+const queryClient = new QueryClient()
 
-const queryClient = new QueryClient();
+if (!projectId) {
+  throw new Error('Project ID is not defined')
+}
 
-export function Providers({ children }: { children: ReactNode }) {
+// Set up metadata
+const metadata = {
+  name: 'LayerTao',
+  description: 'LayerTao Developer Portal',
+  url: 'https://platform.layertao.com', // origin must match your domain & subdomain
+  icons: ['https://avatars.githubusercontent.com/u/179229932']
+}
+
+// Create the modal
+createAppKit({
+  adapters: [wagmiAdapter],
+  projectId,
+  networks: [mainnet],
+  defaultNetwork: mainnet,
+  metadata: metadata,
+  features: {
+    analytics: true
+  }
+})
+
+export function Providers({ children, cookies }: { children: ReactNode; cookies: string | null }) {
+  const initialState = cookieToInitialState(wagmiAdapter.wagmiConfig as Config, cookies)
+
   return (
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>
-        {children}
-      </QueryClientProvider>
+    <WagmiProvider config={wagmiAdapter.wagmiConfig as Config} initialState={initialState}>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </WagmiProvider>
-  );
+  )
 }
