@@ -9,7 +9,8 @@ import {
   CheckCircle2, 
   Image as ImageIcon,
   Loader2,
-  Network
+  Network,
+  Brain // Added Brain icon for the think block
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +63,22 @@ function SubnetIcon({
   );
 }
 
+// --- HELPER FUNCTION TO PARSE <think> TAGS ---
+function parseMessageContent(content: string) {
+  let thinkContent = "";
+  let mainContent = content;
+
+  // Regex matches <think>...</think> or <think>... if streaming isn't complete yet
+  const thinkMatch = content.match(/<think>([\s\S]*?)(?:<\/think>|$)/);
+  if (thinkMatch) {
+    thinkContent = thinkMatch[1].trim();
+    // Remove the think block from the main content
+    mainContent = content.replace(/<think>([\s\S]*?)(?:<\/think>|$)/, '').trim();
+  }
+
+  return { thinkContent, mainContent };
+}
+
 export function Playground() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -110,7 +127,6 @@ export function Playground() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // PASS THE SELECTED MODEL ALONG WITH THE MESSAGES
         body: JSON.stringify({ 
           model: selectedModel,
           messages: [
@@ -257,7 +273,6 @@ export function Playground() {
               </p>
             </div>
             
-            {/* --- MODEL DROPDOWN INTEGRATED HERE --- */}
             <div className="flex items-center gap-3">
               <Select value={selectedModel} onValueChange={setSelectedModel}>
                 <SelectTrigger className="!h-11 w-[240px] bg-background border-border/50 shadow-sm text-xs focus:ring-primary/20">
@@ -283,7 +298,6 @@ export function Playground() {
                 <CheckCircle2 className="h-3 w-3" /> Ready
               </div>
             </div>
-            {/* -------------------------------------- */}
 
           </div>
 
@@ -312,11 +326,34 @@ export function Playground() {
                         {msg.role === "user" ? (
                           <div className="whitespace-pre-wrap">{msg.content}</div>
                         ) : (
-                         <div className="prose prose-sm dark:prose-invert max-w-none break-words text-foreground">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {msg.content}
-                        </ReactMarkdown>
-                      </div>
+                          // --- UPDATED ASSISTANT RENDERER ---
+                          (() => {
+                            const { thinkContent, mainContent } = parseMessageContent(msg.content);
+                            
+                            return (
+                              <div className="flex flex-col gap-3">
+                                {thinkContent && (
+                                  <details className="group border border-border/50 rounded-xl overflow-hidden bg-background/50 open:bg-background/80 transition-colors">
+                                    <summary className="cursor-pointer px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2 hover:bg-muted/40 transition-colors select-none">
+                                      <Brain className="h-3.5 w-3.5" />
+                                      <span className="group-open:hidden">View Thinking Process</span>
+                                      <span className="hidden group-open:inline">Hide Thinking Process</span>
+                                    </summary>
+                                    <div className="p-4 pt-2 text-[13px] text-muted-foreground/80 border-t border-border/50 whitespace-pre-wrap font-mono leading-relaxed max-h-[300px] overflow-y-auto">
+                                      {thinkContent}
+                                    </div>
+                                  </details>
+                                )}
+                                {mainContent && (
+                                  <div className="prose prose-sm dark:prose-invert max-w-none break-words text-foreground">
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                      {mainContent}
+                                    </ReactMarkdown>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()
                         )}
                       </div>
                     </div>

@@ -9,10 +9,10 @@ const client = new OpenAI({
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json();
+    const { messages, model } = await req.json();
 
     const response = await client.chat.completions.create({
-      model: process.env.CHUTES_MODEL || "deepseek-ai/DeepSeek-V3.1-Terminus-TEE", 
+      model: model, 
       messages: messages,
       max_tokens: 500,
       temperature: 0.7,
