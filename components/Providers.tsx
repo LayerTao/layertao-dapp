@@ -30,7 +30,9 @@ createAppKit({
   defaultNetwork: mainnet,
   metadata: metadata,
   features: {
-    analytics: true
+    analytics: true,
+    socials: [],
+    email: false,
   }
 })
 

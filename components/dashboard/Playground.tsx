@@ -10,10 +10,11 @@ import {
   Image as ImageIcon,
   Loader2,
   Network,
-  Brain // Added Brain icon for the think block
+  Brain,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { RoutingVisual, SubnetIcon, type SubnetOption } from "@/components/layout/RoutingVisual";
 import {
   Select,
   SelectContent,
@@ -23,12 +24,18 @@ import {
 } from "@/components/ui/select";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useAccount } from "wagmi";
+import { formatUnits } from "viem";
+import useTokenBalance from "@/hooks/useTokenBalance";
+import { TOKEN_ADDRESS, GATING_THRESHOLD } from "@/lib/constants";
+import { Lock } from "lucide-react";
+import { useAppKit } from "@reown/appkit/react";
 
 // Define the message type
 type Message = {
   role: "user" | "assistant";
   content: string;
-};
+}
 
 // --- PRE-FORMATTED MODEL LIST ---
 const availableModels = [
@@ -39,30 +46,6 @@ const availableModels = [
   { id: "MiniMaxAI/MiniMax-M2.5-TEE", company: "MiniMax", name: "MiniMax-M2.5-TEE" },
   { id: "chutesai/Mistral-Small-3.1-24B-Instruct-2503-TEE", company: "Chutes AI", name: "Mistral-Small-3.1-24B-Instruct-2503-TEE" },
 ];
-
-function SubnetIcon({ 
-  iconString, 
-  className 
-}: { 
-  iconString: string; 
-  className?: string;
-}) {
-  const [hasError, setHasError] = useState(false);
-
-  if (iconString === "default" || hasError) {
-    return <Network className={className} />;
-  }
-
-  return (
-    <img 
-      src={`/assets/subnets/${iconString}.svg`}
-      alt="Subnet icon"
-      className={className}
-      onError={() => setHasError(true)}
-    />
-  );
-}
-
 // --- HELPER FUNCTION TO PARSE <think> TAGS ---
 function parseMessageContent(content: string) {
   let thinkContent = "";
@@ -86,6 +69,20 @@ export function Playground() {
   const [activeSubnet, setActiveSubnet] = useState("subnet-01");
   const [selectedModel, setSelectedModel] = useState(availableModels[0].id);
 
+  const { isConnected } = useAccount();
+  const { balance, decimals, isFetched } = useTokenBalance(TOKEN_ADDRESS);
+
+  // Determine if the user is gated
+  // If not connected, or if fetched and balance is below threshold
+  const isGated = isConnected && isFetched && balance !== undefined && balance < GATING_THRESHOLD;
+  const showLock = !isConnected || isGated;
+  const needsConnection = !isConnected;
+  const { open } = useAppKit();
+
+  const thresholdFormatted = GATING_THRESHOLD > BigInt(0) && typeof decimals === 'number'
+    ? formatUnits(GATING_THRESHOLD, decimals) 
+    : "0";
+
   const subnetOptions = [
     {
       id: "subnet-01",
@@ -97,7 +94,7 @@ export function Playground() {
     },
     {
       id: "subnet-02",
-      title: "Subnet 02",
+      title: "Lium",
       subtitle: "Reasoning workloads",
       description: "Designed for longer context windows and more complex tasks.",
       iconString: "default", 
@@ -105,13 +102,15 @@ export function Playground() {
     },
     {
       id: "subnet-03",
-      title: "Subnet 03",
+      title: "Targon",
       subtitle: "Specialized agents",
       description: "Best for agentic flows, orchestration, and domain-specific tools.",
       iconString: "default", 
       available: false,
     },
   ];
+
+  const [routingStep, setRoutingStep] = useState<'idle' | 'routing' | 'processing' | 'received'>('idle');
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -122,8 +121,13 @@ export function Playground() {
     setMessages(newMessages);
     setInput("");
     setIsLoading(true);
+    setRoutingStep('routing');
 
     try {
+      // Small artificial delay for "Routing" phase
+      await new Promise(resolve => setTimeout(resolve, 800));
+      setRoutingStep('processing');
+
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -139,11 +143,17 @@ export function Playground() {
       const data = await res.json();
 
       if (data.reply) {
+        setRoutingStep('received');
         setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
+        
+        // Reset status after a brief moment of success showing
+        setTimeout(() => setRoutingStep('idle'), 3000);
       } else {
+        setRoutingStep('idle');
         console.error(data.error);
       }
     } catch (error) {
+      setRoutingStep('idle');
       console.error("Failed to send message:", error);
     } finally {
       setIsLoading(false);
@@ -302,9 +312,55 @@ export function Playground() {
           </div>
 
           <div className="flex-1 p-6 flex flex-col gap-6">
-            <div className="flex-1 min-h-[400px] max-h-[500px] rounded-[20px] border border-dashed border-border bg-muted/10 flex flex-col relative overflow-hidden">
+            <div className="flex-1 min-h-[400px] rounded-[20px] border border-dashed border-border bg-muted/10 flex flex-col relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background/50 pointer-events-none" />
               
+              {showLock ? (
+                <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/60 backdrop-blur-md p-8 text-center animate-in fade-in duration-500">
+                  <div className="relative mb-6">
+                    <div className="absolute inset-0 animate-pulse blur-2xl bg-primary/20 rounded-full" />
+                    <div className="relative h-20 w-20 rounded-3xl bg-card border border-border shadow-2xl flex items-center justify-center">
+                      <Lock className="h-10 w-10 text-primary" />
+                    </div>
+                  </div>
+                  <h3 className="text-2xl font-sans tracking-tight font-bold text-foreground mb-3">
+                    {needsConnection ? "Connect Wallet to Access" : "Token Gated Access"}
+                  </h3>
+                  <p className="text-sm text-muted-foreground max-w-[300px] leading-relaxed mb-8">
+                    {needsConnection 
+                      ? "The Playground requires a connected wallet and a minimum token balance to use." 
+                      : `You need at least ${thresholdFormatted} $LAYERTAO tokens to use the Playground.`}
+                  </p>
+                  
+                  {!isConnected ? (
+                    <div className="flex flex-col gap-2 w-full max-w-[240px]">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+                        Get Started
+                      </p>
+                      {/* Note: Clicking this triggers the wallet modal */}
+                      <Button 
+                        onClick={() => open()}
+                        className="w-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20 rounded-xl h-12 font-bold transition-all active:scale-95"
+                      >
+                        Connect Wallet
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="px-6 py-3 rounded-2xl bg-muted/50 border border-border flex items-center gap-3">
+                        <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
+                        <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                          Balance: {balance !== undefined && balance !== null && typeof decimals === 'number' ? formatUnits(balance as bigint, decimals) : "0"} $LAYERTAO
+                        </span>
+                      </div>
+                      <Button variant="outline" className="rounded-xl font-bold">
+                        Learn how to get $LAYERTAO
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
               <div className="w-full h-full p-6 overflow-y-auto z-10 flex flex-col gap-4">
                 {messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full gap-3 text-center opacity-40">
@@ -369,21 +425,21 @@ export function Playground() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 rounded-[24px] border border-border bg-background px-4 py-3 shadow-inner focus-within:border-primary/50 transition-colors group">
+            <div className={`flex items-center gap-3 rounded-[24px] border border-border bg-background px-4 py-3 shadow-inner focus-within:border-primary/50 transition-colors group ${showLock ? "opacity-50 pointer-events-none" : ""}`}>
               <Input
                 className="flex-1 bg-transparent border-none focus-visible:ring-0 shadow-none text-base placeholder:text-muted-foreground/40 font-medium"
-                placeholder="Ask anything or add your prompt here..."
+                placeholder={showLock ? "Connect wallet to start" : "Ask anything or add your prompt here..."}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSend();
+                  if (e.key === "Enter" && !showLock) handleSend();
                 }}
-                disabled={isLoading}
+                disabled={isLoading || showLock}
               />
               <Button
                 size="icon"
                 onClick={handleSend}
-                disabled={!input.trim() || isLoading}
+                disabled={!input.trim() || isLoading || showLock}
                 className="h-11 w-11 bg-foreground text-background hover:bg-foreground/90 shadow-lg transition-transform active:scale-95 shrink-0 disabled:opacity-50"
               >
                 <Send className="h-5 w-5" />
@@ -394,35 +450,22 @@ export function Playground() {
 
         {/* Aside Sidebar */}
         <aside className="flex flex-col gap-6">
-          <div className="rounded-[28px] border border-border bg-muted/30 p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-sm font-bold text-foreground uppercase tracking-widest text-[11px]">Examples</h2>
-              <span className="text-[10px] font-bold text-muted-foreground bg-background border border-border px-2 py-0.5 rounded-full uppercase tracking-tighter">
-                3 presets
-              </span>
+          <div className="rounded-[32px] border border-border bg-card p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-sm font-bold text-foreground uppercase tracking-widest text-[11px]">Request Routing</h2>
+              <div className="flex items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                <span className={`h-1.5 w-1.5 rounded-full ${isLoading ? "bg-amber-500 animate-pulse" : "bg-healthy"}`} />
+                {isLoading ? "Active" : "Stable"}
+              </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { label: "Market Map", id: "preset-1" },
-                { label: "Agent Flow", id: "preset-2" },
-                { label: "Model Test", id: "preset-3" }
-              ].map((example) => (
-                <button
-                  key={example.id}
-                  className="group flex flex-col items-center gap-2"
-                >
-                  <div className="aspect-square w-full rounded-[20px] border border-border bg-background flex items-center justify-center text-muted-foreground transition-all hover:-translate-y-1 hover:border-primary/30 hover:bg-primary/5 group-hover:text-primary">
-                    <ImageIcon className="h-6 w-6 opacity-60" />
-                  </div>
-                  <p className="w-full truncate text-[10px] font-bold uppercase tracking-widest text-center text-muted-foreground group-hover:text-foreground transition-colors">
-                    {example.label}
-                  </p>
-                </button>
-              ))}
-            </div>
+            <RoutingVisual 
+              activeSubnet={activeSubnet} 
+              step={routingStep} 
+              subnets={subnetOptions} 
+            />
 
-            <div className="mt-8 rounded-[24px] border border-border bg-card p-5 shadow-sm relative overflow-hidden group">
+            <div className="mt-8 rounded-[24px] border border-border bg-muted/10 p-5 shadow-sm relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
                 <Network className="h-12 w-12" />
               </div>
@@ -430,7 +473,7 @@ export function Playground() {
                 Why LayerTao?
               </h3>
               <p className="text-[13px] leading-relaxed text-muted-foreground font-medium">
-                It presents a single abstraction layer over the subnet ecosystem so builders do not need to manually coordinate routing, failover, or subnet-specific integration logic.
+                It presents a single abstraction layer over the subnet ecosystem so builders do not need to manually coordinate routing.
               </p>
             </div>
           </div>

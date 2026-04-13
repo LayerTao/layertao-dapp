@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useAccount, useDisconnect, useBalance } from "wagmi";
 import { useAppKit } from "@reown/appkit/react";
 import { formatUnits } from "viem";
+import useTokenBalance from "@/hooks/useTokenBalance";
+import { TOKEN_ADDRESS } from "@/lib/constants";
 import { ChevronDown, RefreshCw, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +19,7 @@ export function ConnectWallet() {
   const { open } = useAppKit();
   const { disconnect } = useDisconnect();
   const { data: ethBalance, refetch: refetchEth } = useBalance({ address });
+  const { balance: taoBalance, decimals: taoDecimals, refetch: refetchTao } = useTokenBalance(TOKEN_ADDRESS);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -95,7 +98,11 @@ export function ConnectWallet() {
             <p className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase mb-2 group-hover:text-purple-500/70 transition-colors">
               $LAYERTAO
             </p>
-            <p className="text-sm font-bold text-foreground">0 LAYERTAO</p>
+            <p className="text-sm font-bold text-foreground">
+              {taoBalance !== undefined && taoBalance !== null && typeof taoDecimals === "number"
+                ? `${parseFloat(formatUnits(taoBalance as bigint, taoDecimals)).toFixed(4)} LAYERTAO`
+                : "0.0000 LAYERTAO"}
+            </p>
           </div>
         </div>
 
@@ -103,7 +110,10 @@ export function ConnectWallet() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => refetchEth()}
+            onClick={() => {
+              refetchEth();
+              refetchTao();
+            }}
             className="rounded-xl font-sans font-semibold text-xs border-border/50 dark:bg-zinc-900/50 hover:bg-zinc-800/80"
           >
             <RefreshCw className="mr-2 h-3 w-3" />
