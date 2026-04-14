@@ -40,11 +40,16 @@ type Message = {
 // --- PRE-FORMATTED MODEL LIST ---
 const availableModels = [
   { id: "Qwen/Qwen3-32B-TEE", company: "Qwen", name: "Qwen3-32B-TEE" },
+  { id: "Qwen/Qwen3-Coder-Next-TEE", company: "Qwen", name: "Qwen3-Coder-Next-TEE" },
   { id: "openai/gpt-oss-120b-TEE", company: "OpenAI", name: "gpt-oss-120b-TEE" },
   { id: "deepseek-ai/DeepSeek-V3.1-TEE", company: "DeepSeek", name: "DeepSeek-V3.1-TEE" },
-  { id: "moonshotai/Kimi-K2.5-TEE", company: "Moonshot AI", name: "Kimi-K2.5-TEE" },
+  { id: "deepseek-ai/DeepSeek-R1-0528-TEE", company: "DeepSeek", name: "DeepSeek-R1-0528-TEE" },
+  { id: "deepseek-ai/DeepSeek-V3.2-TEE", company: "DeepSeek", name: "DeepSeek-V3.2-TEE" },
   { id: "MiniMaxAI/MiniMax-M2.5-TEE", company: "MiniMax", name: "MiniMax-M2.5-TEE" },
-  { id: "chutesai/Mistral-Small-3.1-24B-Instruct-2503-TEE", company: "Chutes AI", name: "Mistral-Small-3.1-24B-Instruct-2503-TEE" },
+  { id: "zai-org/GLM-4.7-TEE", company: "Zai-Org", name: "GLM-4.7-TEE" },
+  { id: "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE", company: "Qwen", name: "Qwen3-235B-A22B-Instruct-2507-TEE" },
+  { id: "zai-org/GLM-5-Turbo", company: "Zai-Org", name: "GLM-5-Turbo" },
+
 ];
 // --- HELPER FUNCTION TO PARSE <think> TAGS ---
 function parseMessageContent(content: string) {
@@ -312,7 +317,7 @@ export function Playground() {
           </div>
 
           <div className="flex-1 p-6 flex flex-col gap-6">
-            <div className="flex-1 min-h-[400px] rounded-[20px] border border-dashed border-border bg-muted/10 flex flex-col relative overflow-hidden">
+            <div className="flex-1 min-h-[400px] max-h-[600px] rounded-[20px] border border-dashed border-border bg-muted/10 flex flex-col relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background/50 pointer-events-none" />
               
               {showLock ? (
