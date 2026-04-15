@@ -168,12 +168,12 @@ export function Playground() {
   return (
     <div className="flex flex-col gap-6">
       {/* Header Section */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <p className="text-[0.7rem] font-display font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-1">
+          <p className="text-[0.65rem] md:text-[0.7rem] font-display font-semibold uppercase tracking-[0.3em] text-muted-foreground">
             Playground
           </p>
-          <h1 className="mt-1 text-3xl font-sans tracking-[-0.03em] text-foreground ">
+          <h1 className="text-2xl md:text-3xl font-sans tracking-[-0.03em] text-foreground leading-tight">
             Build across subnets
           </h1>
         </div>
@@ -193,11 +193,11 @@ export function Playground() {
           </span>
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
           {/* LayerTao Unified Router */}
           <button 
             disabled
-            className="group relative col-span-3 overflow-hidden rounded-[24px] border border-border dark:border-white/10 bg-gradient-to-br from-zinc-900 to-zinc-800 dark:from-panel dark:to-background p-6 text-left shadow-lg opacity-80 cursor-not-allowed"
+            className="group relative col-span-1 sm:col-span-2 md:col-span-3 xl:col-span-3 overflow-hidden rounded-[24px] border border-border dark:border-white/10 bg-gradient-to-br from-zinc-900 to-zinc-800 dark:from-panel dark:to-background p-6 text-left shadow-lg opacity-80 cursor-not-allowed min-h-[160px]"
           >
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.1),transparent_40%)] dark:bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.05),transparent_40%)]" />
             <div className="relative flex h-full flex-col">
@@ -275,10 +275,10 @@ export function Playground() {
       </section>
 
       {/* Workspace Grid */}
-      <section className="grid gap-6 xl:grid-cols-[1fr_340px]">
+      <section className="grid gap-6 lg:grid-cols-[1fr_300px] xl:grid-cols-[1fr_340px]">
         {/* Prompt Workspace */}
         <div className="flex flex-col rounded-[28px] border border-border bg-card shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between border-b border-border/50 px-6 py-4 bg-muted/20">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-border/50 px-6 py-4 bg-muted/20">
             <div>
               <h2 className="text-sm font-bold text-foreground flex items-center gap-2 uppercase tracking-widest text-[11px]">
                 <Layout className="h-3.5 w-3.5" /> Prompt Workspace
@@ -288,9 +288,9 @@ export function Playground() {
               </p>
             </div>
             
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               <Select value={selectedModel} onValueChange={setSelectedModel}>
-                <SelectTrigger className="!h-11 w-[240px] bg-background border-border/50 shadow-sm text-xs focus:ring-primary/20">
+                <SelectTrigger className="!h-11 w-full sm:w-[220px] lg:w-[240px] bg-background border-border/50 shadow-sm text-xs focus:ring-primary/20">
                   <SelectValue placeholder="Select a model" />
                 </SelectTrigger>
                 <SelectContent>
@@ -321,14 +321,14 @@ export function Playground() {
               <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background/50 pointer-events-none" />
               
               {showLock ? (
-                <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/60 backdrop-blur-md p-8 text-center animate-in fade-in duration-500">
+                <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/60 backdrop-blur-md p-6 md:p-8 text-center animate-in fade-in duration-500">
                   <div className="relative mb-6">
                     <div className="absolute inset-0 animate-pulse blur-2xl bg-primary/20 rounded-full" />
-                    <div className="relative h-20 w-20 rounded-3xl bg-card border border-border shadow-2xl flex items-center justify-center">
-                      <Lock className="h-10 w-10 text-primary" />
+                    <div className="relative h-16 w-16 md:h-20 md:w-20 rounded-[20px] md:rounded-3xl bg-card border border-border shadow-2xl flex items-center justify-center">
+                      <Lock className="h-8 w-8 md:h-10 md:w-10 text-primary" />
                     </div>
                   </div>
-                  <h3 className="text-2xl font-sans tracking-tight font-bold text-foreground mb-3">
+                  <h3 className="text-xl md:text-2xl font-sans tracking-tight font-bold text-foreground mb-2 md:mb-3">
                     {needsConnection ? "Connect Wallet to Access" : "Token Gated Access"}
                   </h3>
                   <p className="text-sm text-muted-foreground max-w-[300px] leading-relaxed mb-8">
