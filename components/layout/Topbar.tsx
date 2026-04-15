@@ -56,7 +56,7 @@ export function Topbar() {
             />
           </div>
           <div className="flex flex-col">
-            <h1 className="text-lg font-semibold tracking-tight text-foreground hidden md:text-xl">
+            <h1 className="text-lg font-semibold tracking-tight text-foreground hidden md:flex md:text-xl">
               Developer Console
             </h1>
             <p className="hidden text-xs text-muted-foreground md:block">

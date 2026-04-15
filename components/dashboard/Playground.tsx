@@ -358,8 +358,10 @@ export function Playground() {
                           Balance: {balance !== undefined && balance !== null && typeof decimals === 'number' ? formatUnits(balance as bigint, decimals) : "0"} $LAYERTAO
                         </span>
                       </div>
-                      <Button variant="outline" className="rounded-xl font-bold">
-                        Learn how to get $LAYERTAO
+                      <Button variant="outline" onClick={() => {
+                        window.open("https://app.uniswap.org/explore/tokens/ethereum/0xA73Cc56A437718F6da80dd7F5e26a8E24B9F852c?inputCurrency=NATIVE", "_blank");
+                      }} className="">
+                        Get $LAYERTAO
                       </Button>
                     </div>
                   )}
