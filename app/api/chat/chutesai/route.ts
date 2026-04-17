@@ -1,4 +1,4 @@
-// app/api/chat/route.ts
+// app/api/chat/chutesai/route.ts
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
@@ -14,12 +14,13 @@ export async function POST(req: Request) {
     const response = await client.chat.completions.create({
       model: model, 
       messages: messages,
-      max_tokens: 500,
-      temperature: 0.7,
+      max_tokens: 1024,
+      temperature: 0.5,
     });
 
     return NextResponse.json({ 
-      reply: response.choices[0].message.content 
+      reply: response.choices[0].message.content,
+      subnetID: "subnet-64" 
     });
 
   } catch (error) {

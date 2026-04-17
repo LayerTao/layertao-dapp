@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { 
   Play, 
   Save, 
@@ -40,17 +40,16 @@ type Message = {
 // --- PRE-FORMATTED MODEL LIST ---
 const availableModels = [
   { id: "Qwen/Qwen3-32B-TEE", company: "Qwen", name: "Qwen3-32B-TEE" },
-  { id: "Qwen/Qwen3-Coder-Next-TEE", company: "Qwen", name: "Qwen3-Coder-Next-TEE" },
   { id: "openai/gpt-oss-120b-TEE", company: "OpenAI", name: "gpt-oss-120b-TEE" },
   { id: "deepseek-ai/DeepSeek-V3.1-TEE", company: "DeepSeek", name: "DeepSeek-V3.1-TEE" },
-  { id: "deepseek-ai/DeepSeek-R1-0528-TEE", company: "DeepSeek", name: "DeepSeek-R1-0528-TEE" },
   { id: "deepseek-ai/DeepSeek-V3.2-TEE", company: "DeepSeek", name: "DeepSeek-V3.2-TEE" },
+  { id: "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE", company: "Moonshot AI", name: "Qwen3-235B-A22B-Instruct-2507-TEE" },
   { id: "MiniMaxAI/MiniMax-M2.5-TEE", company: "MiniMax", name: "MiniMax-M2.5-TEE" },
-  { id: "zai-org/GLM-4.7-TEE", company: "Zai-Org", name: "GLM-4.7-TEE" },
-  { id: "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE", company: "Qwen", name: "Qwen3-235B-A22B-Instruct-2507-TEE" },
-  { id: "zai-org/GLM-5-Turbo", company: "Zai-Org", name: "GLM-5-Turbo" },
+  { id: "zai-org/GLM-5-Turbo", company: "Chutes AI", name: "zai-org/GLM-5-Turbo" },
+  { id: "tngtech/DeepSeek-TNG-R1T2-Chimera-TEE", company: "Chutes AI", name: "tngtech/DeepSeek-TNG-R1T2-Chimera-TEE" },
+  { id: "Qwen/Qwen3-Coder-Next-TEE", company: "Qwen", name: "Qwen/Qwen3-Coder-Next-TEE" },
+  ];
 
-];
 // --- HELPER FUNCTION TO PARSE <think> TAGS ---
 function parseMessageContent(content: string) {
   let thinkContent = "";
@@ -71,8 +70,18 @@ export function Playground() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [activeSubnet, setActiveSubnet] = useState("subnet-01");
+  const [activeSubnet, setActiveSubnet] = useState("subnet-64"); // Changed default to generic accessible
   const [selectedModel, setSelectedModel] = useState(availableModels[0].id);
+  const [routedSubnet, setRoutedSubnet] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   const { isConnected } = useAccount();
   const { balance, decimals, isFetched } = useTokenBalance(TOKEN_ADDRESS);
@@ -90,20 +99,20 @@ export function Playground() {
 
   const subnetOptions = [
     {
-      id: "subnet-01",
+      id: "subnet-64",
       title: "Chutes AI",
       subtitle: "Deep Reasoning",
       description: "Designed for complex AI workloads requiring deeper context and multi-step thinking.",
       iconString: "chutes-ai", 
       available: true,
     },
-    {
-      id: "subnet-02",
-      title: "Lium",
-      subtitle: "Reasoning workloads",
-      description: "Designed for longer context windows and more complex tasks.",
-      iconString: "default", 
-      available: false,
+   {
+      id: "subnet-22",
+      title: "Desearch",
+      subtitle: "AI Search Engine",
+      description: "Access real-time web, news, and social media data through a single, unified API designed to power AI agents and intelligent applications.",
+      iconString: "desearch", 
+      available: true,
     },
     {
       id: "subnet-03",
@@ -125,6 +134,7 @@ export function Playground() {
     
     setMessages(newMessages);
     setInput("");
+    setRoutedSubnet(null);
     setIsLoading(true);
     setRoutingStep('routing');
 
@@ -133,7 +143,13 @@ export function Playground() {
       await new Promise(resolve => setTimeout(resolve, 800));
       setRoutingStep('processing');
 
-      const res = await fetch("/api/chat", {
+      let endpoint = "/api/chat/unified";
+      const isUnified = activeSubnet === "unified";
+
+      if (activeSubnet === "subnet-64") endpoint = "/api/chat/chutesai";
+      else if (activeSubnet === "subnet-22") endpoint = "/api/chat/desearch";
+
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
@@ -145,17 +161,53 @@ export function Playground() {
         }),
       });
 
-      const data = await res.json();
+      if (!res.ok) throw new Error("Failed to fetch response");
 
-      if (data.reply) {
-        setRoutingStep('received');
-        setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
-        
-        // Reset status after a brief moment of success showing
-        setTimeout(() => setRoutingStep('idle'), 3000);
+      if (isUnified) {
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+
+            for (const line of lines) {
+              if (!line.trim()) continue;
+              try {
+                const data = JSON.parse(line);
+                if (data.type === "routing") {
+                  setRoutedSubnet(data.subnetID);
+                } else if (data.type === "content" && data.reply) {
+                  setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
+                  setRoutingStep('received');
+                  setTimeout(() => setRoutingStep('idle'), 5000);
+                } else if (data.error) {
+                  console.error(data.error);
+                  setRoutingStep('idle');
+                }
+              } catch (e) {
+                console.error("Error parsing stream line:", e);
+              }
+            }
+          }
+        }
       } else {
-        setRoutingStep('idle');
-        console.error(data.error);
+        const data = await res.json();
+        // console.log("Data:", data);
+        if (data.reply) {
+          setRoutingStep('received');
+          setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
+          setTimeout(() => setRoutingStep('idle'), 5000);
+        } else {
+          setRoutingStep('idle');
+          console.error(data.error);
+        }
       }
     } catch (error) {
       setRoutingStep('idle');
@@ -196,17 +248,35 @@ export function Playground() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
           {/* LayerTao Unified Router */}
           <button 
-            disabled
-            className="group relative col-span-1 sm:col-span-2 md:col-span-3 xl:col-span-3 overflow-hidden rounded-[24px] border border-border dark:border-white/10 bg-gradient-to-br from-zinc-900 to-zinc-800 dark:from-panel dark:to-background p-6 text-left shadow-lg opacity-80 cursor-not-allowed min-h-[160px]"
+            onClick={() => {
+              if (!isLoading) {
+                setActiveSubnet("unified");
+                setRoutedSubnet(null);
+              }
+            }}
+            disabled={isLoading}
+            className={`group relative col-span-1 sm:col-span-2 md:col-span-3 xl:col-span-3 overflow-hidden rounded-[24px] border ${
+              activeSubnet === "unified" 
+                ? "border-primary/50 bg-background ring-1 ring-primary/20 opacity-100" 
+                : "border-border dark:border-white/10 opacity-80 hover:opacity-100 hover:border-border/80"
+            } bg-gradient-to-br from-zinc-900 to-zinc-800 dark:from-panel dark:to-background p-6 text-left shadow-lg transition-all min-h-[160px] ${isLoading ? "cursor-not-allowed" : "cursor-pointer"}`}
           >
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.1),transparent_40%)] dark:bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.05),transparent_40%)]" />
             <div className="relative flex h-full flex-col">
               <div className="flex items-center justify-between">
-                <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white/90">
+                <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] border ${
+                  activeSubnet === "unified" 
+                    ? "border-primary/30 bg-primary/10 text-primary" 
+                    : "border-white/20 bg-white/10 text-white/90"
+                }`}>
                   Unified
                 </span>
-                <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-white/70 backdrop-blur-sm border border-white/10">
-                  Coming Soon
+                <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm border ${
+                  activeSubnet === "unified" 
+                    ? "bg-green-500/10 text-green-400 border-green-500/20" 
+                    : "bg-white/10 text-white/70 border-white/10"
+                }`}>
+                  {activeSubnet === "unified" ? "Selected" : "Available"}
                 </span>
               </div>
               <div className="mt-8">
@@ -223,14 +293,12 @@ export function Playground() {
             <button
               key={option.id}
               onClick={() => option.available && setActiveSubnet(option.id)}
-              disabled={!option.available}
-              className={`col-span-1 rounded-[24px] border p-4 text-left shadow-sm transition-all group ${
+              disabled={isLoading}
+              className={`group relative flex flex-col rounded-[32px] border p-6 text-left transition-all duration-300 ${
                 activeSubnet === option.id 
-                  ? "border-primary/5 bg-background ring-1 ring-primary/20" 
-                  : option.available 
-                    ? "border-border bg-background hover:-translate-y-0.5 hover:border-border/80 hover:bg-muted/30"
-                    : "border-border/50 bg-muted/10 opacity-70 cursor-not-allowed"
-              }`}
+                  ? "border-primary bg-card shadow-lg shadow-primary/5 ring-1 ring-primary/20 scale-[1.02] z-10" 
+                  : "border-border/50 bg-muted/20 hover:border-border hover:bg-muted/40 opacity-80"
+              } ${!option.available || isLoading ? "cursor-not-allowed" : "cursor-pointer"}`}
             >
               <div className="flex items-center justify-between">
                 <span className={`rounded-full border px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.2em] ${
@@ -289,25 +357,27 @@ export function Playground() {
             </div>
             
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              <Select value={selectedModel} onValueChange={setSelectedModel}>
-                <SelectTrigger className="!h-11 w-full sm:w-[220px] lg:w-[240px] bg-background border-border/50 shadow-sm text-xs focus:ring-primary/20">
-                  <SelectValue placeholder="Select a model" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableModels.map((model) => (
-                    <SelectItem key={model.id} value={model.id} className="py-2 cursor-pointer">
-                      <div className="flex flex-col items-start gap-0.5">
-                        <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
-                          {model.company}
-                        </span>
-                        <span className="font-semibold text-foreground text-[13px]">
-                          {model.name}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {activeSubnet === "subnet-64" && (
+                <Select value={selectedModel} onValueChange={setSelectedModel}>
+                  <SelectTrigger className="!h-11 w-full sm:w-[220px] lg:w-[240px] bg-background border-border/50 shadow-sm text-xs focus:ring-primary/20">
+                    <SelectValue placeholder="Select a model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableModels.map((model) => (
+                      <SelectItem key={model.id} value={model.id} className="py-2 cursor-pointer">
+                        <div className="flex flex-col items-start gap-0.5">
+                          <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+                            {model.company}
+                          </span>
+                          <span className="font-semibold text-foreground text-[13px]">
+                            {model.name}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               
               <div className="flex items-center gap-1.5 rounded-full border border-healthy/20 bg-healthy/10 px-2.5 py-1 text-[10px] font-bold text-healthy uppercase tracking-wider shrink-0">
                 <CheckCircle2 className="h-3 w-3" /> Ready
@@ -389,7 +459,6 @@ export function Playground() {
                         {msg.role === "user" ? (
                           <div className="whitespace-pre-wrap">{msg.content}</div>
                         ) : (
-                          // --- UPDATED ASSISTANT RENDERER ---
                           (() => {
                             const { thinkContent, mainContent } = parseMessageContent(msg.content);
                             
@@ -422,6 +491,7 @@ export function Playground() {
                     </div>
                   ))
                 )}
+                <div ref={messagesEndRef} />
                 {isLoading && (
                   <div className="flex w-full justify-start">
                     <div className="max-w-[80%] rounded-2xl rounded-tl-sm bg-muted border border-border/50 px-4 py-3">
@@ -467,9 +537,10 @@ export function Playground() {
             </div>
 
             <RoutingVisual 
-              activeSubnet={activeSubnet} 
+              activeSubnet={(activeSubnet === "unified" && routedSubnet) ? routedSubnet : activeSubnet} 
               step={routingStep} 
               subnets={subnetOptions} 
+              isUnifiedProtocol={activeSubnet === "unified"}
             />
 
             <div className="mt-8 rounded-[24px] border border-border bg-muted/10 p-5 shadow-sm relative overflow-hidden group">

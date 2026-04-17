@@ -47,18 +47,29 @@ export function SubnetIcon({
 export function RoutingVisual({ 
   activeSubnet, 
   step,
-  subnets 
+  subnets,
+  isUnifiedProtocol
 }: { 
   activeSubnet: string; 
   step: 'idle' | 'routing' | 'processing' | 'received';
   subnets: SubnetOption[];
+  isUnifiedProtocol?: boolean;
 }) {
   const activeIndex = subnets.findIndex(s => s.id === activeSubnet);
-  const activeTitle = subnets[activeIndex]?.title || "Subnet";
+  const isActiveIndexFound = activeIndex !== -1;
+  const safeActiveIndex = isActiveIndexFound ? activeIndex : 1;
+  
+  // This state persists the cool "ANALYZING INTENT" visualization even after the target subnet is selected
+  const isUnified = activeSubnet === "unified" || isUnifiedProtocol;
+  
+  const activeTitle = isActiveIndexFound 
+
+    ? subnets[activeIndex].title 
+    : (isUnified ? "LayerTao Central Intelligence" : "Subnet");
 
   // By using strict 1/3 widths for the columns below, 
   // the centers mathematically align perfectly to these percentages.
-  const startX = activeIndex === 0 ? 16.666 : activeIndex === 1 ? 50 : 83.333;
+  const startX = safeActiveIndex === 0 ? 16.666 : safeActiveIndex === 1 ? 50 : 83.333;
   const endX = 50; 
   
   // Smooth S-Curve
@@ -74,20 +85,24 @@ export function RoutingVisual({
       border: "border-border/50",
     },
     routing: {
-      title: "ROUTING QUERY",
-      description: `Optimizing path and routing your request to ${activeTitle}...`,
-      icon: Network,
-      color: "text-primary",
-      bg: "bg-primary/5",
-      border: "border-primary/20",
+      title: isUnified ? "ANALYZING INTENT" : "ROUTING QUERY",
+      description: isUnified 
+        ? `LayerTao Intelligence is analyzing your query to determine the optimal compute layer...`
+        : `Optimizing path and routing your request to ${activeTitle}...`,
+      icon: isUnified ? Zap : Network,
+      color: isUnified ? "text-[#71E3AA]" : "text-primary",
+      bg: isUnified ? "bg-[#71E3AA]/5" : "bg-primary/5",
+      border: isUnified ? "border-[#71E3AA]/30" : "border-primary/20",
     },
     processing: {
-      title: "PROCESSING",
-      description: `Subnet ${activeIndex + 1} (${activeTitle}) is generating a response.`,
-      icon: Brain,
-      color: "text-amber-500",
-      bg: "bg-amber-500/5",
-      border: "border-amber-500/20",
+      title: isUnified ? "GENERATING RESPONSE" : "PROCESSING",
+      description: isUnified
+        ? `LayerTao Intelligence routed the task to ${activeTitle} and is synthesizing the generation.`
+        : `Subnet ${activeIndex + 1} (${activeTitle}) is generating a response.`,
+      icon: isUnified ? Zap : Brain,
+      color: isUnified ? "text-fuchsia-400" : "text-amber-500",
+      bg: isUnified ? "bg-fuchsia-400/5" : "bg-amber-500/5",
+      border: isUnified ? "border-fuchsia-400/30" : "border-amber-500/20",
     },
     received: {
       title: "ROUTING SUCCESSFUL",
@@ -173,25 +188,41 @@ export function RoutingVisual({
               preserveAspectRatio="none" 
               className="absolute inset-0 w-full h-full overflow-visible"
             >
+               {isUnified && (
+                 <defs>
+                   <linearGradient id="unified-pulse" x1="0%" y1="0%" x2="100%" y2="100%">
+                     <stop offset="0%" stopColor="#71E3AA">
+                       <animate attributeName="stop-color" values="#71E3AA; #718FD5; #71E3AA" dur="2s" repeatCount="indefinite" />
+                     </stop>
+                     <stop offset="100%" stopColor="#718FD5">
+                       <animate attributeName="stop-color" values="#718FD5; #71E3AA; #718FD5" dur="2s" repeatCount="indefinite" />
+                     </stop>
+                   </linearGradient>
+                 </defs>
+               )}
                <path 
                  d={pathData} 
                  fill="none" 
-                 stroke="#718FD5" 
-                 strokeWidth="1.5"
+                 stroke={isUnified && (step === 'routing' || step === 'processing') ? "url(#unified-pulse)" : "#718FD5"} 
+                 strokeWidth={isUnified && (step === 'routing' || step === 'processing') ? "2" : "1.5"}
                  vectorEffect="non-scaling-stroke"
-                 className="transition-all duration-500"
+                 className={`transition-all duration-500 ${isUnified && (step === 'routing' || step === 'processing') ? 'opacity-80 drop-shadow-[0_0_8px_rgba(113,227,170,0.6)]' : ''}`}
                />
             </svg>
             
             {/* Origin Dot (Anchored perfectly to top edge) */}
             <div 
-              className="absolute top-0 h-1.5 w-1.5 rounded-full bg-[#718FD5] -translate-x-1/2 -translate-y-1/2 shadow-[0_0_8px_#718FD5]" 
+              className={`absolute top-0 h-1.5 w-1.5 rounded-full -translate-x-1/2 -translate-y-1/2 ${
+                isUnified && (step === 'routing' || step === 'processing') ? 'bg-[#71E3AA] shadow-[0_0_12px_#71E3AA] animate-pulse' : 'bg-[#718FD5] shadow-[0_0_8px_#718FD5]'
+              }`} 
               style={{ left: `${startX}%` }} 
             />
             
             {/* Destination Dot (Anchored perfectly to bottom edge) */}
             <div 
-              className="absolute bottom-0 h-1.5 w-1.5 rounded-full bg-[#718FD5] -translate-x-1/2 translate-y-1/2 shadow-[0_0_8px_#718FD5]" 
+              className={`absolute bottom-0 h-1.5 w-1.5 rounded-full -translate-x-1/2 translate-y-1/2 ${
+                isUnified && (step === 'routing' || step === 'processing') ? 'bg-[#71E3AA] shadow-[0_0_12px_#71E3AA] animate-pulse' : 'bg-[#718FD5] shadow-[0_0_8px_#718FD5]'
+              }`} 
               style={{ left: `${endX}%` }} 
             />
           </>
