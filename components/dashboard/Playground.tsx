@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useRef, useEffect } from "react";
+import { usePlaygroundStore, type Message } from "@/store/playground-store";
 import { 
   Play, 
   Save, 
@@ -31,11 +32,7 @@ import { TOKEN_ADDRESS, GATING_THRESHOLD } from "@/lib/constants";
 import { Lock } from "lucide-react";
 import { useAppKit } from "@reown/appkit/react";
 
-// Define the message type
-type Message = {
-  role: "user" | "assistant";
-  content: string;
-}
+
 
 // --- PRE-FORMATTED MODEL LIST ---
 const availableModels = [
@@ -67,12 +64,15 @@ function parseMessageContent(content: string) {
 }
 
 export function Playground() {
-  const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [activeSubnet, setActiveSubnet] = useState("subnet-64"); // Changed default to generic accessible
-  const [selectedModel, setSelectedModel] = useState(availableModels[0].id);
-  const [routedSubnet, setRoutedSubnet] = useState<string | null>(null);
+  const {
+    input, setInput,
+    messages, setMessages,
+    isLoading, setIsLoading,
+    activeSubnet, setActiveSubnet,
+    selectedModel, setSelectedModel,
+    routedSubnet, setRoutedSubnet,
+    routingStep, setRoutingStep
+  } = usePlaygroundStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -124,7 +124,7 @@ export function Playground() {
     },
   ];
 
-  const [routingStep, setRoutingStep] = useState<'idle' | 'routing' | 'processing' | 'received'>('idle');
+
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -313,7 +313,7 @@ export function Playground() {
                     activeSubnet === option.id ? "bg-transparent border-green-500" : "border-border bg-zinc-200 dark:bg-zinc-800 group-hover:bg-primary/50"
                   }`} />
                 ) : (
-                  <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                  <span className="text-[7px] font-bold uppercase tracking-widest text-muted-foreground/60">
                    Coming Soon
                   </span>
                 )}
@@ -346,7 +346,7 @@ export function Playground() {
       <section className="grid gap-6 lg:grid-cols-[1fr_300px] xl:grid-cols-[1fr_340px]">
         {/* Prompt Workspace */}
         <div className="flex flex-col rounded-[28px] border border-border bg-card shadow-sm overflow-hidden">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-border/50 px-6 py-4 bg-muted/20">
+          <div className="flex flex-col gap-4 min-h-20 lg:flex-row lg:items-center lg:justify-between border-b border-border/50 px-6 py-4 bg-muted/20">
             <div>
               <h2 className="text-sm font-bold text-foreground flex items-center gap-2 uppercase tracking-widest text-[11px]">
                 <Layout className="h-3.5 w-3.5" /> Prompt Workspace

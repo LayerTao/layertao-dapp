@@ -69,24 +69,24 @@ export function Topbar() {
       {/* Right Actions */}
       <div className="flex items-center gap-2 md:gap-4">
         {/* Search - Collapsed on Mobile, visible on MD */}
-        <div className="relative hidden w-64 lg:block">
+        {/* <div className="relative hidden w-64 lg:block">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="h-9 pl-9 bg-muted/30 border-transparent focus-visible:bg-background transition-all"
             placeholder="Search console..."
           />
-        </div>
+        </div> */}
 
         <div className="flex items-center gap-1.5 md:gap-2">
           {/* Action Buttons - Hidden on Mobile */}
-          <div className="hidden items-center gap-2 sm:flex">
+          {/* <div className="hidden items-center gap-2 sm:flex">
             <Button variant="ghost" size="sm" asChild className="text-muted-foreground">
               <Link href="/docs">Docs</Link>
             </Button>
             <Button size="sm" asChild className="hidden lg:flex">
               <Link href="/api-keys">Create API Key</Link>
             </Button>
-          </div>
+          </div> */}
 
           {/* Theme Toggle */}
           <Button

@@ -16,14 +16,14 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { href: "/", label: "Overview", icon: LayoutDashboard },
-   { href: "/subnet-pulse", label: "Subnet Pulse", icon: Activity },
-  { href: "/api-keys", label: "API Keys", icon: Key },
+  // { href: "/", label: "Overview", icon: LayoutDashboard },
+  //  { href: "/subnet-pulse", label: "Subnet Pulse", icon: Activity },
+  // { href: "/api-keys", label: "API Keys", icon: Key },
  
-  { href: "/billing", label: "Billing", icon: CreditCard },
-  { href: "/usage", label: "Usage", icon: Zap },
-  { href: "/docs", label: "Docs", icon: BookOpen },
-  { href: "/playground", label: "Playground", icon: PlaySquare },
+  // { href: "/billing", label: "Billing", icon: CreditCard },
+  // { href: "/usage", label: "Usage", icon: Zap },
+  // { href: "/docs", label: "Docs", icon: BookOpen },
+  { href: "/", label: "Playground", icon: PlaySquare },
 ];
 
 export function Sidebar() {
