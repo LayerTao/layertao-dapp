@@ -3,6 +3,7 @@ import { create } from 'zustand';
 export type Message = {
   role: "user" | "assistant";
   content: string;
+  image?: string;
 };
 
 interface PlaygroundState {
