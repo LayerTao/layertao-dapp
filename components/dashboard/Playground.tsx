@@ -32,7 +32,11 @@ import remarkGfm from "remark-gfm";
 import { useAccount } from "wagmi";
 import { formatUnits } from "viem";
 import useTokenBalance from "@/hooks/useTokenBalance";
-import { TOKEN_ADDRESS, GATING_THRESHOLD, WHITELISTED_ADDRESSES } from "@/lib/constants";
+import {
+  TOKEN_ADDRESS,
+  GATING_THRESHOLD,
+  WHITELISTED_ADDRESSES,
+} from "@/lib/constants";
 import { Lock } from "lucide-react";
 import { useAppKit } from "@reown/appkit/react";
 
@@ -131,9 +135,11 @@ export function Playground() {
 
   // Determine if the user is gated
   // Check if address is whitelisted (case-insensitive)
-  const isWhitelisted = address && WHITELISTED_ADDRESSES.some(
-    addr => addr.toLowerCase() === address.toLowerCase()
-  );
+  const isWhitelisted =
+    address &&
+    WHITELISTED_ADDRESSES.some(
+      (addr) => addr.toLowerCase() === address.toLowerCase(),
+    );
 
   // If not connected, or if fetched and balance is below threshold (and not whitelisted)
   const isGated =
@@ -212,7 +218,7 @@ export function Playground() {
           model: selectedModel,
           messages: [
             { role: "system", content: "You are a helpful AI assistant." },
-            ...newMessages,
+            ...newMessages.map(({ role, content }) => ({ role, content })),
           ],
         }),
       });
