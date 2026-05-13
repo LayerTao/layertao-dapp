@@ -7,7 +7,8 @@ import {
   Target,
   Zap,
   Activity,
-  Cpu
+  Cpu,
+  Image
 } from "lucide-react";
 
 export type SubnetOption = {
@@ -31,8 +32,12 @@ export function SubnetIcon({
   if (iconString === "default" || hasError) {
     if (iconString === "lium") return <Cpu className={className} />;
     if (iconString === "targon") return <Zap className={className} />;
+    if (iconString === "imagegen") return <Image className={className} />;
     return <Network className={className} />;
   }
+
+  // Handle specific lucide icons even without error
+  if (iconString === "imagegen") return <Image className={className} />;
 
   return (
     <img 

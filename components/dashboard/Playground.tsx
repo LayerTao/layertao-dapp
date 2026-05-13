@@ -32,7 +32,7 @@ import remarkGfm from "remark-gfm";
 import { useAccount } from "wagmi";
 import { formatUnits } from "viem";
 import useTokenBalance from "@/hooks/useTokenBalance";
-import { TOKEN_ADDRESS, GATING_THRESHOLD } from "@/lib/constants";
+import { TOKEN_ADDRESS, GATING_THRESHOLD, WHITELISTED_ADDRESSES } from "@/lib/constants";
 import { Lock } from "lucide-react";
 import { useAppKit } from "@reown/appkit/react";
 
@@ -126,13 +126,19 @@ export function Playground() {
     scrollToBottom();
   }, [messages]);
 
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useAccount();
   const { balance, decimals, isFetched } = useTokenBalance(TOKEN_ADDRESS);
 
   // Determine if the user is gated
-  // If not connected, or if fetched and balance is below threshold
+  // Check if address is whitelisted (case-insensitive)
+  const isWhitelisted = address && WHITELISTED_ADDRESSES.some(
+    addr => addr.toLowerCase() === address.toLowerCase()
+  );
+
+  // If not connected, or if fetched and balance is below threshold (and not whitelisted)
   const isGated =
     isConnected &&
+    !isWhitelisted &&
     isFetched &&
     balance !== undefined &&
     balance < GATING_THRESHOLD;
