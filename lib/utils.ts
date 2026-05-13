@@ -88,5 +88,18 @@ Do NOT include all tools — pick only what's relevant.`
         required: ["tools"]
       }
     }
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "route_to_imagegen",
+      description: `Route to Image Gen for image creation requests.
+Use when the user asks to generate, create, draw, or visualize an image, artwork, or scene.`,
+      parameters: {
+        type: "object",
+        properties: {},
+        required: []
+      }
+    }
   }
 ];
