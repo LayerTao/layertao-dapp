@@ -93,13 +93,34 @@ Do NOT include all tools — pick only what's relevant.`
     type: "function" as const,
     function: {
       name: "route_to_imagegen",
-      description: `Route to Image Gen for image creation requests.
-Use when the user asks to generate, create, draw, or visualize an image, artwork, or scene.`,
+      description: `Route to image generation when the user wants to create, generate, draw, or visualize an image from a text description.`,
       parameters: {
         type: "object",
-        properties: {},
-        required: []
-      }
-    }
-  }
+        properties: {
+          messages: {
+            type: "array",
+            items: { type: "object" },
+          },
+        },
+        required: ["messages"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "route_to_bitmind",
+      description: "Route to Bitmind when the user wants to check whether an image is AI-generated or real. Use for image authenticity detection, deepfake checking, or AI image verification.",
+      parameters: {
+        type: "object",
+        properties: {
+          messages: {
+            type: "array",
+            items: { type: "object" },
+          },
+        },
+        required: ["messages"],
+      },
+    },
+  },
 ];

@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { 
+import {
   Network,
   Brain,
   Target,
   Zap,
   Activity,
   Cpu,
-  Image
+  Image,
+  Eye,
 } from "lucide-react";
 
 export type SubnetOption = {
@@ -29,15 +30,13 @@ export function SubnetIcon({
 }) {
   const [hasError, setHasError] = useState(false);
 
-  if (iconString === "default" || hasError) {
+  if (iconString === "default" || iconString === "imagegen" || iconString === "bitmind" || hasError) {
+    if (iconString === "imagegen") return <Image className={className} />;
+    if (iconString === "bitmind") return <Eye className={className} />;
     if (iconString === "lium") return <Cpu className={className} />;
     if (iconString === "targon") return <Zap className={className} />;
-    if (iconString === "imagegen") return <Image className={className} />;
     return <Network className={className} />;
   }
-
-  // Handle specific lucide icons even without error
-  if (iconString === "imagegen") return <Image className={className} />;
 
   return (
     <img 
@@ -62,7 +61,7 @@ export function RoutingVisual({
 }) {
   const activeIndex = subnets.findIndex(s => s.id === activeSubnet);
   const isActiveIndexFound = activeIndex !== -1;
-  const safeActiveIndex = isActiveIndexFound ? activeIndex : 1;
+  const safeActiveIndex = isActiveIndexFound ? activeIndex : 0;
   
   // This state persists the cool "ANALYZING INTENT" visualization even after the target subnet is selected
   const isUnified = activeSubnet === "unified" || isUnifiedProtocol;
@@ -72,13 +71,18 @@ export function RoutingVisual({
     ? subnets[activeIndex].title 
     : (isUnified ? "LayerTao Central Intelligence" : "Subnet");
 
-  // By using strict 1/3 widths for the columns below, 
-  // the centers mathematically align perfectly to these percentages.
-  const startX = safeActiveIndex === 0 ? 16.666 : safeActiveIndex === 1 ? 50 : 83.333;
-  const endX = 50; 
-  
-  // Smooth S-Curve
-  const pathData = `M ${startX} 0 C ${startX} 50, ${endX} 50, ${endX} 100`;
+  // Position each subnet's center evenly across the SVG viewBox (0-100)
+  const total = subnets.length;
+  const startX = (safeActiveIndex * 2 + 1) / (total * 2) * 100;
+  const endX = 50;
+
+  // Idle background track — always uses exact positions
+  const idlePathData = `M ${startX} 0 C ${startX} 50, ${endX} 50, ${endX} 100`;
+
+  // Active curve — when start/end share the same X (center subnet),
+  // nudge start slightly so the line remains visible instead of collapsing.
+  const curveStartX = startX === endX ? startX - 2 : startX;
+  const activePathData = `M ${curveStartX} 0 C ${curveStartX} 50, ${endX} 50, ${endX} 100`;
 
   const statusConfig = {
     idle: {
@@ -129,7 +133,7 @@ export function RoutingVisual({
         {subnets.map((subnet) => {
           const isActive = subnet.id === activeSubnet;
           return (
-            <div key={subnet.id} className="w-1/3 px-1.5 flex flex-col items-center gap-2">
+            <div key={subnet.id} className="px-1.5 flex flex-col items-center gap-2" style={{ width: `${100 / subnets.length}%` }}>
               <span className={`text-[9px] font-bold uppercase tracking-widest transition-colors ${
                 isActive ? "text-foreground" : "text-muted-foreground/60"
               }`}>
@@ -174,10 +178,10 @@ export function RoutingVisual({
             preserveAspectRatio="none" 
             className="absolute inset-0 w-full h-full overflow-visible"
           >
-            <path 
-              d={pathData} 
-              fill="none" 
-              stroke="currentColor" 
+            <path
+              d={idlePathData}
+              fill="none"
+              stroke="currentColor"
               strokeWidth="1.5"
               vectorEffect="non-scaling-stroke"
               className="text-border opacity-30"
@@ -205,8 +209,8 @@ export function RoutingVisual({
                    </linearGradient>
                  </defs>
                )}
-               <path 
-                 d={pathData} 
+               <path
+                 d={activePathData}
                  fill="none" 
                  stroke={isUnified && (step === 'routing' || step === 'processing') ? "url(#unified-pulse)" : "#718FD5"} 
                  strokeWidth={isUnified && (step === 'routing' || step === 'processing') ? "2" : "1.5"}
@@ -220,9 +224,9 @@ export function RoutingVisual({
               className={`absolute top-0 h-1.5 w-1.5 rounded-full -translate-x-1/2 -translate-y-1/2 ${
                 isUnified && (step === 'routing' || step === 'processing') ? 'bg-[#71E3AA] shadow-[0_0_12px_#71E3AA] animate-pulse' : 'bg-[#718FD5] shadow-[0_0_8px_#718FD5]'
               }`} 
-              style={{ left: `${startX}%` }} 
+              style={{ left: `${curveStartX}%` }}
             />
-            
+
             {/* Destination Dot (Anchored perfectly to bottom edge) */}
             <div 
               className={`absolute bottom-0 h-1.5 w-1.5 rounded-full -translate-x-1/2 translate-y-1/2 ${
