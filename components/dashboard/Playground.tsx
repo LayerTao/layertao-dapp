@@ -571,7 +571,23 @@ export function Playground() {
                       if (!file) return;
                       const reader = new FileReader();
                       reader.onload = () => {
-                        setUploadedImage(reader.result as string);
+                        const img = new window.Image();
+                        img.onload = () => {
+                          const MAX = 1024;
+                          let { width, height } = img;
+                          if (width > MAX || height > MAX) {
+                            const ratio = Math.min(MAX / width, MAX / height);
+                            width = Math.round(width * ratio);
+                            height = Math.round(height * ratio);
+                          }
+                          const canvas = document.createElement("canvas");
+                          canvas.width = width;
+                          canvas.height = height;
+                          const ctx = canvas.getContext("2d")!;
+                          ctx.drawImage(img, 0, 0, width, height);
+                          setUploadedImage(canvas.toDataURL("image/jpeg", 0.7));
+                        };
+                        img.src = reader.result as string;
                       };
                       reader.readAsDataURL(file);
                       e.target.value = "";
