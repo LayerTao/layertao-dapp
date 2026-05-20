@@ -66,28 +66,40 @@ async function callImageGen(prompt: string) {
   }
 }
 
-async function callBitmind(imageInput: string) {
-  const response = await fetch("https://api.bitmind.ai/detect-image", {
+async function callBitmind(input: string) {
+  const videoExt = /\.(mp4|m4v|webm|mov|avi|mkv|ogv)(\?.*)?$/i;
+  const isVideo = input.startsWith("data:video/") || videoExt.test(input);
+
+  const endpoint = isVideo
+    ? "https://api.bitmind.ai/oracle/v1/34/detect-video"
+    : "https://api.bitmind.ai/detect-image";
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${process.env.BITMIND_API_KEY}`,
+    "Content-Type": "application/json",
+  };
+  if (isVideo) headers["x-bitmind-application"] = "oracle-api";
+
+  const body = isVideo ? { video: input } : { image: input };
+
+  const response = await fetch(endpoint, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.BITMIND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ image: imageInput }),
+    headers,
+    body: JSON.stringify(body),
   });
 
   const data = await response.json();
-  const isAI = data.isAI;
   const confidence = (data.confidence * 100).toFixed(1);
   const conf = parseFloat(confidence);
   const confPercent = `${confidence}%`;
+  const prefix = isVideo ? "Video" : "Image";
 
-  if (isAI && conf >= 90) return `**AI-Generated** — ${confPercent} confidence\n\nHigh-confidence detection of synthetic origin.`;
-  if (isAI && conf >= 70) return `**Likely AI-Generated** — ${confPercent} confidence\n\nMultiple indicators point to synthetic generation.`;
-  if (isAI) return `**Possibly AI-Generated** — ${confPercent} confidence\n\nResults lean synthetic, though evidence is limited.`;
-  if (!isAI && conf >= 90) return `**Authentic** — ${confPercent} confidence\n\nNo indications of AI generation detected.`;
-  if (!isAI && conf >= 70) return `**Likely Authentic** — ${confPercent} confidence\n\nThe image appears genuine with minimal synthetic markers.`;
-  return `**Uncertain** — ${confPercent} confidence\n\nInconclusive result; the image could not be reliably classified.`;
+  if (data.isAI && conf >= 90) return `**AI-Generated ${prefix}** — ${confPercent} confidence\n\nHigh-confidence detection of synthetic origin.`;
+  if (data.isAI && conf >= 70) return `**Likely AI-Generated ${prefix}** — ${confPercent} confidence\n\nMultiple indicators point to synthetic generation.`;
+  if (data.isAI) return `**Possibly AI-Generated ${prefix}** — ${confPercent} confidence\n\nResults lean synthetic, though evidence is limited.`;
+  if (!data.isAI && conf >= 90) return `**Authentic ${prefix}** — ${confPercent} confidence\n\nNo indications of AI generation detected.`;
+  if (!data.isAI && conf >= 70) return `**Likely Authentic ${prefix}** — ${confPercent} confidence\n\nThe ${isVideo ? "video" : "image"} appears genuine with minimal synthetic markers.`;
+  return `**Uncertain ${prefix}** — ${confPercent} confidence\n\nInconclusive result; could not be reliably classified.`;
 }
 
 async function callDesearch(query:  string, tools: string[]) {

@@ -76,6 +76,8 @@ export function Playground() {
   } = usePlaygroundStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [uploadedVideoFile, setUploadedVideoFile] = useState<File | null>(null);
+  const [sizeWarning, setSizeWarning] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -147,17 +149,21 @@ export function Playground() {
     const hasImage = (isBitmind || isUnified) && !!uploadedImage;
     const hasText = input.trim().length > 0;
 
-    if ((!hasText && !hasImage) || isLoading) return;
+    const hasVideo = isBitmind && !!uploadedVideoFile;
+
+    if ((!hasText && !hasImage && !hasVideo) || isLoading) return;
 
     const imageToSend = hasImage ? uploadedImage : null;
+    const videoFileToSend = hasVideo ? uploadedVideoFile : null;
     // UI caption: only what the user typed, empty if none
-    const displayContent = hasText ? input : "";
+    const displayContent = hasText ? input : (hasVideo ? `Video: ${uploadedVideoFile!.name}` : "");
     const userMessage: Message = { role: "user", content: displayContent, image: imageToSend || undefined };
     const newMessages = [...messages, userMessage];
 
     setMessages(newMessages);
     setInput("");
     setUploadedImage(null);
+    setUploadedVideoFile(null);
     setRoutedSubnet(null);
     setIsLoading(true);
     setRoutingStep('routing');
@@ -167,11 +173,15 @@ export function Playground() {
       setRoutingStep('processing');
 
       let endpoint = "/api/chat/unified";
+      let isFormData = false;
 
       if (activeSubnet === "subnet-64") endpoint = "/api/chat/chutesai";
       else if (activeSubnet === "subnet-22") endpoint = "/api/chat/desearch";
       else if (activeSubnet === "subnet-65") endpoint = "/api/chat/imagegen";
-      else if (activeSubnet === "subnet-66") endpoint = "/api/chat/bitmind";
+      else if (activeSubnet === "subnet-66") {
+        endpoint = "/api/chat/bitmind";
+        if (videoFileToSend) isFormData = true;
+      }
 
       // Build messages for API — inject routing context when an image is attached
       // so the unified router knows to route to Bitmind, without showing it in the chat.
@@ -183,23 +193,26 @@ export function Playground() {
         apiMessages[lastUserIdx].content = `[Image attached for verification] ${apiMessages[lastUserIdx].content}`;
       }
 
-      const body: Record<string, unknown> = {
-        model: selectedModel,
-        messages: [
-          { role: "system", content: "You are a helpful AI assistant." },
-          ...apiMessages
-        ]
-      };
-
-      if (imageToSend) {
-        body.image = imageToSend;
+      let res: Response;
+      if (isFormData && videoFileToSend) {
+        const formData = new FormData();
+        formData.append("video", videoFileToSend);
+        res = await fetch(endpoint, { method: "POST", body: formData });
+      } else {
+        const body: Record<string, unknown> = {
+          model: selectedModel,
+          messages: [
+            { role: "system", content: "You are a helpful AI assistant." },
+            ...apiMessages
+          ]
+        };
+        if (imageToSend) body.image = imageToSend;
+        res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
       }
-
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
 
       if (!res.ok) throw new Error("Failed to fetch response");
 
@@ -563,17 +576,32 @@ export function Playground() {
                   <Upload className="h-5 w-5" />
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/*,video/*"
                     className="absolute w-0 h-0 opacity-0"
                     disabled={isLoading || showLock}
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
+                      if (file.type.startsWith("video/")) {
+                        if (file.size > 10 * 1024 * 1024) {
+                          setUploadedVideoFile(null);
+                          setUploadedImage(null);
+                          setSizeWarning(true);
+                          setTimeout(() => setSizeWarning(false), 4000);
+                          e.target.value = "";
+                          return;
+                        }
+                        setUploadedVideoFile(file);
+                        setUploadedImage(null);
+                        e.target.value = "";
+                        return;
+                      }
+                      setUploadedVideoFile(null);
                       const reader = new FileReader();
                       reader.onload = () => {
                         const img = new window.Image();
                         img.onload = () => {
-                          const MAX = 1024;
+                          const MAX = 2048;
                           let { width, height } = img;
                           if (width > MAX || height > MAX) {
                             const ratio = Math.min(MAX / width, MAX / height);
@@ -598,7 +626,7 @@ export function Playground() {
 
               <Input
                 className="flex-1 bg-transparent border-none focus-visible:ring-0 shadow-none text-base placeholder:text-muted-foreground/40 font-medium"
-                placeholder={showLock ? "Connect wallet to start" : activeSubnet === "subnet-66" ? (uploadedImage ? "Add a note (optional)..." : "Paste image URL or upload an image...") : "Ask anything or add your prompt here..."}
+                placeholder={showLock ? "Connect wallet to start" : activeSubnet === "subnet-66" ? (uploadedImage ? "Add a note (optional)..." : "Paste image/video URL or upload an image...") : "Ask anything or add your prompt here..."}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -608,23 +636,46 @@ export function Playground() {
               />
 
               {(activeSubnet === "subnet-66" || activeSubnet === "unified") && uploadedImage && (
-                <div className="shrink-0 h-10 w-10 rounded-lg overflow-hidden border border-border/50">
+                <div className="shrink-0 relative group h-10 w-10 rounded-lg overflow-hidden border border-border/50">
                   <img src={uploadedImage} alt="Preview" className="h-full w-full object-cover" />
+                  <button
+                    onClick={() => setUploadedImage(null)}
+                    className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+              )}
+              {(activeSubnet === "subnet-66" || activeSubnet === "unified") && uploadedVideoFile && (
+                <div className="shrink-0 flex items-center gap-1 rounded-lg bg-muted/30 border border-border/50 pl-2 pr-1 py-1 text-[10px] text-muted-foreground max-w-[140px]" title={uploadedVideoFile.name}>
+                  <Upload className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{uploadedVideoFile.name}</span>
+                  <button
+                    onClick={() => setUploadedVideoFile(null)}
+                    className="shrink-0 h-4 w-4 flex items-center justify-center rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
                 </div>
               )}
 
               <Button
                 size="icon"
                 onClick={handleSend}
-                disabled={activeSubnet === "subnet-66" ? (!uploadedImage || isLoading || showLock) : activeSubnet === "unified" ? (!uploadedImage && !input.trim() || isLoading || showLock) : (!input.trim() || isLoading || showLock)}
+                disabled={activeSubnet === "subnet-66" ? (!uploadedImage && !uploadedVideoFile && !input.trim() || isLoading || showLock) : activeSubnet === "unified" ? (!uploadedImage && !uploadedVideoFile && !input.trim() || isLoading || showLock) : (!input.trim() || isLoading || showLock)}
                 className="h-11 w-11 bg-foreground text-background hover:bg-foreground/90 shadow-lg transition-transform active:scale-95 shrink-0 disabled:opacity-50"
               >
                 <Send className="h-5 w-5" />
               </Button>
             </div>
-            {activeSubnet === "subnet-66" && !uploadedImage && (
+            {sizeWarning && (
+              <p className="text-[11px] text-red-500 font-medium px-1">
+                Video exceeds 10 MB limit. Paste a URL instead, or use a smaller file.
+              </p>
+            )}
+            {activeSubnet === "subnet-66" && !uploadedImage && !uploadedVideoFile && !sizeWarning && (
               <p className="text-[11px] text-amber-500 font-medium px-1">
-                Bitmind requires an image. Upload a file or paste an image URL above.
+                Bitmind requires an image or video. Upload a file or paste a URL above.
               </p>
             )}
           </div>
