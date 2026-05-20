@@ -149,7 +149,7 @@ export function Playground() {
     const hasImage = (isBitmind || isUnified) && !!uploadedImage;
     const hasText = input.trim().length > 0;
 
-    const hasVideo = isBitmind && !!uploadedVideoFile;
+    const hasVideo = (isBitmind || isUnified) && !!uploadedVideoFile;
 
     if ((!hasText && !hasImage && !hasVideo) || isLoading) return;
 
@@ -181,6 +181,13 @@ export function Playground() {
       else if (activeSubnet === "subnet-66") {
         endpoint = "/api/chat/bitmind";
         if (videoFileToSend) isFormData = true;
+      }
+
+      // Unified + video file: send direct to bitmind (router can't process raw video)
+      if (isUnified && videoFileToSend) {
+        endpoint = "/api/chat/bitmind";
+        isFormData = true;
+        setRoutedSubnet("subnet-66");
       }
 
       // Build messages for API — inject routing context when an image is attached
@@ -216,7 +223,7 @@ export function Playground() {
 
       if (!res.ok) throw new Error("Failed to fetch response");
 
-      if (isUnified) {
+      if (isUnified && endpoint === "/api/chat/unified") {
         const reader = res.body?.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
