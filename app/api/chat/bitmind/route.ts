@@ -1,5 +1,6 @@
 // app/api/chat/bitmind/route.ts
 import { NextResponse } from "next/server";
+import { createConversation, saveMessage } from "@/lib/supabase";
 
 const VIDEO_EXTENSIONS = /\.(mp4|m4v|webm|mov|avi|mkv|ogv)(\?.*)?$/i;
 
@@ -35,9 +36,21 @@ export async function POST(req: Request) {
     if (contentType.startsWith("multipart/form-data")) {
       const formData = await req.formData();
       const videoFile = formData.get("video") as File | null;
+      const walletAddress = formData.get("walletAddress") as string | null;
+      const conversationId = formData.get("conversationId") as string | null;
+
+      let convId = conversationId;
+      if (!convId && walletAddress) {
+        const conv = await createConversation(walletAddress, `Video: ${videoFile?.name || 'upload'}`);
+        convId = conv.id;
+      }
 
       if (!videoFile) {
         return NextResponse.json({ error: "No video file provided." }, { status: 400 });
+      }
+
+      if (convId) {
+        await saveMessage(convId, "user", `Video: ${videoFile.name}`);
       }
 
       const bitmindForm = new FormData();
@@ -56,16 +69,33 @@ export async function POST(req: Request) {
       }
 
       const data = await response.json();
+      const reply = formatReply(data, "video");
+      if (convId) await saveMessage(convId, "assistant", reply);
+
       return NextResponse.json({
-        reply: formatReply(data, "video"),
+        reply: reply,
         result: data,
         subnetID: "subnet-66",
+        conversationId: convId,
       });
     }
 
     // JSON body — image or video URL
-    const { image, messages } = await req.json();
+    const { image, messages, walletAddress, conversationId } = await req.json();
+    
+    let convId = conversationId;
+    if (!convId && walletAddress) {
+      const contentStr = typeof messages?.at(-1)?.content === 'string' ? messages?.at(-1)?.content : "Image Detection";
+      const title = contentStr.substring(0, 30) || "Image Detection";
+      const conv = await createConversation(walletAddress, title);
+      convId = conv.id;
+    }
+
     const input = (image || messages?.at(-1)?.content || "").trim();
+
+    if (convId && input) {
+      await saveMessage(convId, "user", messages?.at(-1)?.content || "Image uploaded", image);
+    }
 
     if (!input) {
       return NextResponse.json(
@@ -103,10 +133,15 @@ export async function POST(req: Request) {
     }
 
     const data = await response.json();
+    const reply = formatReply(data, isVideo ? "video" : "image");
+    
+    if (convId) await saveMessage(convId, "assistant", reply);
+
     return NextResponse.json({
-      reply: formatReply(data, isVideo ? "video" : "image"),
+      reply: reply,
       result: data,
       subnetID: "subnet-66",
+      conversationId: convId,
     });
 
   } catch (error) {

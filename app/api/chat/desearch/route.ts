@@ -1,11 +1,24 @@
 // app/api/chat/desearch/route.ts
 import { NextResponse } from "next/server";
+import { createConversation, saveMessage } from "@/lib/supabase";
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json();
+    const { messages, walletAddress, conversationId } = await req.json();
+
+    let convId = conversationId;
+    if (!convId && walletAddress && messages.length > 0) {
+      const contentStr = typeof messages.at(-1)?.content === 'string' ? messages.at(-1)?.content : "New Chat";
+      const title = contentStr.substring(0, 30) || "New Chat";
+      const conv = await createConversation(walletAddress, title);
+      convId = conv.id;
+    }
 
     const lastMessage = messages.at(-1)?.content || "";
+
+    if (convId && lastMessage) {
+      await saveMessage(convId, "user", lastMessage);
+    }
 
     const response = await fetch(
       `${process.env.DESEARCH_BASE_URL}/desearch/ai/search`,
@@ -28,9 +41,15 @@ export async function POST(req: Request) {
     }
 
     const data = await response.json();
+    const reply = data.completion || "No response received from DeSearch.";
+
+    if (convId && reply) {
+      await saveMessage(convId, "assistant", reply);
+    }
 
     return NextResponse.json({ 
-      reply: data.completion || "No response received from DeSearch.",
+      reply: reply,
+      conversationId: convId,
     });
 
   } catch (error) {

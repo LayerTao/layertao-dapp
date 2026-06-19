@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useState } from "react";
-import { usePlaygroundStore, type Message } from "@/store/playground-store";
+import { usePlaygroundStore, type Message, type Conversation } from "@/store/playground-store";
 import { 
   Play, 
   Save, 
@@ -13,6 +13,10 @@ import {
   Network,
   Brain,
   Upload,
+  ChevronDown,
+  Plus,
+  Trash2,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,12 +76,18 @@ export function Playground() {
     activeSubnet, setActiveSubnet,
     selectedModel, setSelectedModel,
     routedSubnet, setRoutedSubnet,
-    routingStep, setRoutingStep
+    routingStep, setRoutingStep,
+    conversationId, setConversationId,
+    isHistoryLoading, setIsHistoryLoading,
+    conversations, setConversations,
+    clearCurrentChat,
   } = usePlaygroundStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [uploadedVideoFile, setUploadedVideoFile] = useState<File | null>(null);
   const [sizeWarning, setSizeWarning] = useState(false);
+  const [chatDropdownOpen, setChatDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -88,6 +98,94 @@ export function Playground() {
   }, [messages]);
 
   const { isConnected,address} = useAccount();
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setChatDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Fetch conversation list on wallet connect
+  useEffect(() => {
+    async function loadConversations() {
+      if (!address) {
+        setConversationId(null);
+        setConversations([]);
+        return;
+      }
+      try {
+        setIsHistoryLoading(true);
+        const res = await fetch(`/api/chat/conversations?walletAddress=${address}`);
+        if (res.ok) {
+          const data = await res.json();
+          setConversations(data.conversations || []);
+        }
+      } catch (e) {
+        console.error("Failed to load conversations", e);
+      } finally {
+        setIsHistoryLoading(false);
+      }
+    }
+    loadConversations();
+  }, [address]);
+
+  // Load a specific conversation's messages
+  const loadConversation = async (convId: string) => {
+    try {
+      setIsHistoryLoading(true);
+      const res = await fetch(`/api/chat/history?conversationId=${convId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setConversationId(convId);
+        setMessages(data.messages || []);
+      }
+    } catch (e) {
+      console.error("Failed to load conversation", e);
+    } finally {
+      setIsHistoryLoading(false);
+      setChatDropdownOpen(false);
+    }
+  };
+
+  // Delete a conversation
+  const deleteConversation = async (convId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const res = await fetch(`/api/chat/conversations?conversationId=${convId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setConversations(conversations.filter(c => c.id !== convId));
+        if (conversationId === convId) {
+          clearCurrentChat();
+        }
+      }
+    } catch (e) {
+      console.error("Failed to delete conversation", e);
+    }
+  };
+
+  // Start a new chat
+  const handleNewChat = () => {
+    clearCurrentChat();
+    setChatDropdownOpen(false);
+  };
+
+  // Helper to update conversation ID from API responses and refresh the list
+  const handleNewConversationId = (newConvId: string) => {
+    setConversationId(newConvId);
+    // Refresh the conversations list in the background
+    if (address) {
+      fetch(`/api/chat/conversations?walletAddress=${address}`)
+        .then(res => res.json())
+        .then(data => setConversations(data.conversations || []))
+        .catch(() => {});
+    }
+  };
+
   const { balance, decimals, isFetched } = useTokenBalance(TOKEN_ADDRESS);
 
    // Check if address is whitelisted (case-insensitive)
@@ -204,10 +302,14 @@ export function Playground() {
       if (isFormData && videoFileToSend) {
         const formData = new FormData();
         formData.append("video", videoFileToSend);
+        formData.append("walletAddress", address || "");
+        formData.append("conversationId", conversationId || "");
         res = await fetch(endpoint, { method: "POST", body: formData });
       } else {
         const body: Record<string, unknown> = {
           model: selectedModel,
+          walletAddress: address,
+          conversationId: conversationId,
           messages: [
             { role: "system", content: "You are a helpful AI assistant." },
             ...apiMessages
@@ -243,6 +345,8 @@ export function Playground() {
                 const data = JSON.parse(line);
                 if (data.type === "routing") {
                   setRoutedSubnet(data.subnetID);
+                } else if (data.type === "conversation_id" && data.conversationId) {
+                  handleNewConversationId(data.conversationId);
                 } else if (data.type === "image" && data.imageBase64) {
                   setMessages((prev) => [...prev, { role: "assistant", content: "", image: data.imageBase64 }]);
                   setRoutingStep('received');
@@ -263,6 +367,10 @@ export function Playground() {
         }
       } else {
         const data = await res.json();
+        // Capture conversationId from non-streaming API responses
+        if (data.conversationId && !conversationId) {
+          handleNewConversationId(data.conversationId);
+        }
         if (data.imageBase64) {
           setRoutingStep('received');
           setMessages((prev) => [...prev, { role: "assistant", content: " ", image: data.imageBase64 }]);
@@ -446,7 +554,78 @@ export function Playground() {
                 </Select>
               )}
               
-              <div className="flex items-center gap-1.5 rounded-full border border-healthy/20 bg-healthy/10 px-2.5 py-1 text-[10px] font-bold text-healthy uppercase tracking-wider shrink-0">
+
+              {/* Chat History Dropdown */}
+              {isConnected && (
+                <div className="relative" ref={dropdownRef}>
+                  <button
+                    onClick={() => setChatDropdownOpen(!chatDropdownOpen)}
+                    className="flex items-center gap-1.5 rounded-full border border-border bg-background hover:bg-muted/50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground transition-colors shrink-0"
+                  >
+                    <MessageSquare className="h-3 w-3" />
+                    Chats
+                    <ChevronDown className={`h-3 w-3 transition-transform ${chatDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {chatDropdownOpen && (
+                    <div className="absolute right-0 top-full mt-2 w-72 z-50 rounded-2xl border border-border bg-card shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                      {/* New Chat Button */}
+                      <button
+                        onClick={handleNewChat}
+                        className="w-full flex items-center gap-2 px-4 py-3 text-sm font-semibold text-primary hover:bg-primary/5 border-b border-border/50 transition-colors"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Start New Chat
+                      </button>
+
+                      {/* Conversations List */}
+                      <div className="max-h-64 overflow-y-auto">
+                        {isHistoryLoading ? (
+                          <div className="flex items-center justify-center py-6">
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          </div>
+                        ) : conversations.length === 0 ? (
+                          <div className="py-6 text-center">
+                            <p className="text-xs text-muted-foreground">No chats yet</p>
+                          </div>
+                        ) : (
+                          conversations.map((conv) => (
+                            <div
+                              key={conv.id}
+                              onClick={() => loadConversation(conv.id)}
+                              className={`flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors group ${
+                                conversationId === conv.id
+                                  ? 'bg-primary/5 border-l-2 border-primary'
+                                  : 'hover:bg-muted/50 border-l-2 border-transparent'
+                              }`}
+                            >
+                              <div className="flex-1 min-w-0 mr-2">
+                                <p className={`text-xs font-medium truncate ${
+                                  conversationId === conv.id ? 'text-primary' : 'text-foreground'
+                                }`}>
+                                  {conv.title || 'Untitled Chat'}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground mt-0.5">
+                                  {new Date(conv.created_at).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <button
+                                onClick={(e) => deleteConversation(conv.id, e)}
+                                className="opacity-0 group-hover:opacity-100 h-6 w-6 flex items-center justify-center rounded-md hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-all shrink-0"
+                                title="Delete chat"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+                 <div className="flex items-center gap-1.5 rounded-full border border-healthy/20 bg-healthy/10 px-2.5 py-1 text-[10px] font-bold text-healthy uppercase tracking-wider shrink-0">
                 <CheckCircle2 className="h-3 w-3" /> Ready
               </div>
             </div>

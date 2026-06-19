@@ -3,7 +3,8 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 // import { availableModels } from "../../../lib/utils";
-import {tools} from "@/lib/utils";
+import { tools } from "@/lib/utils";
+import { createConversation, saveMessage, updateConversationSummary, supabase } from "@/lib/supabase";
 
 // Router (OpenAI)
 const routerClient = new OpenAI({
@@ -15,8 +16,6 @@ const chutesClient = new OpenAI({
   apiKey: process.env.CHUTES_API_KEY,
   baseURL: process.env.CHUTES_BASE_URL,
 });
-
-
 
 async function callChutes(messages: OpenAI.Chat.ChatCompletionMessageParam[], model: string) {
   // console.log("Calling Chutes with model:", model);
@@ -30,8 +29,6 @@ async function callChutes(messages: OpenAI.Chat.ChatCompletionMessageParam[], mo
 
   return response.choices[0].message.content;
 }
-
-
 
 async function callImageGen(prompt: string) {
   const response = await fetch(
@@ -128,7 +125,25 @@ async function callDesearch(query:  string, tools: string[]) {
     return data;
 }
 
-
+async function summarizeBackground(convId: string, messagesToSummarize: any[], oldSummary: string) {
+  try {
+    const textToSummarize = messagesToSummarize.map(m => `${m.role}: ${m.content}`).join('\n');
+    const prompt = `Summarize the following old conversation context into a concise summary (max 150 words). Include important facts, user preferences, and key topics discussed.\n\nOld Summary: ${oldSummary}\n\nNew Messages to compress:\n${textToSummarize}`;
+    
+    const response = await chutesClient.chat.completions.create({
+      model: "Qwen/Qwen3-32B-TEE", // Fast, cheap model for summarization
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 200,
+    });
+    
+    const newSummary = response.choices[0].message.content;
+    if (newSummary) {
+      await updateConversationSummary(convId, newSummary);
+    }
+  } catch(e) {
+    console.error("Background summarization failed:", e);
+  }
+}
 
 export async function POST(req: Request) {
   const encoder = new TextEncoder();
@@ -140,13 +155,36 @@ export async function POST(req: Request) {
       };
 
       try {
-        const { messages, model, image } = await req.json();
+        const { messages, model, image, walletAddress, conversationId } = await req.json();
+
+        const lastMessage = messages.at(-1);
+
+        // 1. Resolve Conversation in DB
+        let convId = conversationId;
+        let summary = "";
+        
+        if (!convId && walletAddress && lastMessage) {
+          // Auto-generate title from the first prompt
+          const contentStr = typeof lastMessage.content === 'string' ? lastMessage.content : "New Chat";
+          const title = contentStr.substring(0, 30) || "New Chat";
+          const conv = await createConversation(walletAddress, title);
+          convId = conv.id;
+          
+          // Stream the new ID back to the frontend immediately
+          sendChunk({ type: "conversation_id", conversationId: convId });
+        } else if (convId) {
+           const { data } = await supabase.from('conversations').select('summary').eq('id', convId).single();
+           if (data) summary = data.summary || "";
+        }
 
         /*
         STEP 1 — Router decides which subnet to use
         */
-        const lastMessage = messages.at(-1);
-        // console.log("Received message for routing:", lastMessage);
+
+        // 2. Save User Message to DB
+        if (convId && lastMessage) {
+           await saveMessage(convId, "user", lastMessage.content, image);
+        }
 
         const routerResponse =
           await routerClient.chat.completions.create({
@@ -222,7 +260,6 @@ HARD RULES:
             temperature: 0,
           });
 
-        // console.log("Router response:", routerResponse);
 
         const toolCall =
           routerResponse.choices[0].message.tool_calls?.[0];
@@ -257,32 +294,59 @@ HARD RULES:
     
 
         let result;
+        let messagesForSubnet = messages;
+
+        // Context Window Management exclusively for Chutes
+        if (toolCall.function.name === "route_to_chutes") {
+           const WINDOW_SIZE = 20;
+           const userAssistMsgs = messages.filter((m: any) => m.role !== 'system');
+           const msgsToKeep = userAssistMsgs.slice(-WINDOW_SIZE);
+           const msgsToSummarize = userAssistMsgs.slice(0, -WINDOW_SIZE);
+
+           if (msgsToSummarize.length > 0 && convId) {
+             // Non-blocking background summarization
+             summarizeBackground(convId, msgsToSummarize, summary);
+           }
+
+           let sysPrompt = "You are a helpful AI assistant.";
+           if (summary) {
+             sysPrompt += `\n\nPrevious Conversation Summary:\n${summary}`;
+           }
+
+           messagesForSubnet = [
+             { role: 'system', content: sysPrompt },
+             ...msgsToKeep
+           ];
+        }
 
         switch (toolCall.function.name) {
           case "route_to_chutes":
             result = await callChutes(
-              messages,
+              messagesForSubnet,
               args.model
             );
+            if (convId && result) await saveMessage(convId, "assistant", result);
             break;
 
           case "route_to_desearch":
-            // console.log("Routing to DeSearch");
             const desearchResult = await callDesearch(
               lastMessage?.content,
               args.tools
             );
             result = desearchResult?.completion;
+            if (convId && result) await saveMessage(convId, "assistant", result);
             break;
 
           case "route_to_imagegen":
             result = await callImageGen(lastMessage?.content);
+            if (convId && result) await saveMessage(convId, "assistant", "", result);
             sendChunk({ type: "image", imageBase64: result });
             controller.close();
             return;
 
           case "route_to_bitmind":
             result = await callBitmind(image || lastMessage?.content);
+            if (convId && result) await saveMessage(convId, "assistant", result);
             break;
 
           default:
@@ -290,7 +354,6 @@ HARD RULES:
             controller.close();
             return;
         }
-        // console.log("Subnet response:", result);
 
         //  Send the final AI output
         sendChunk({ type: "content", reply: result });
