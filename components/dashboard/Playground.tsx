@@ -21,6 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RoutingVisual, SubnetIcon, type SubnetOption } from "@/components/layout/RoutingVisual";
+import { NexusContextCard } from "./NexusContextCard";
 import {
   Select,
   SelectContent,
@@ -36,7 +37,6 @@ import useTokenBalance from "@/hooks/useTokenBalance";
 import { TOKEN_ADDRESS, GATING_THRESHOLD, WHITELISTED_ADDRESSES } from "@/lib/constants";
 import { Lock } from "lucide-react";
 import { useAppKit } from "@reown/appkit/react";
-
 
 
 // --- PRE-FORMATTED MODEL LIST ---
@@ -421,101 +421,312 @@ export function Playground() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-          {/* LayerTao Unified Router */}
-          <button 
-            onClick={() => {
-              if (!isLoading) {
-                setActiveSubnet("unified");
-                setRoutedSubnet(null);
-              }
-            }}
-            disabled={isLoading}
-            className={`group relative col-span-1 sm:col-span-2 md:col-span-3 xl:col-span-3 overflow-hidden rounded-[24px] border ${
-              activeSubnet === "unified" 
-                ? "border-primary/50 bg-background ring-1 ring-primary/20 opacity-100" 
-                : "border-border dark:border-white/10 opacity-80 hover:opacity-100 hover:border-border/80"
-            } bg-gradient-to-br from-zinc-900 to-zinc-800 dark:from-panel dark:to-background p-6 text-left shadow-lg transition-all min-h-[160px] ${isLoading ? "cursor-not-allowed" : "cursor-pointer"}`}
-          >
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.1),transparent_40%)] dark:bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.05),transparent_40%)]" />
-            <div className="relative flex h-full flex-col">
-              <div className="flex items-center justify-between">
-                <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] border ${
-                  activeSubnet === "unified" 
-                    ? "border-primary/30 bg-primary/10 text-primary" 
-                    : "border-white/20 bg-white/10 text-white/90"
-                }`}>
-                  Unified
-                </span>
-                <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm border ${
-                  activeSubnet === "unified" 
-                    ? "bg-green-500/10 text-green-400 border-green-500/20" 
-                    : "bg-white/10 text-white/70 border-white/10"
-                }`}>
-                  {activeSubnet === "unified" ? "Selected" : "Available"}
-                </span>
-              </div>
-              <div className="mt-8">
-                <h3 className="text-2xl tracking-[-0.03em] font-sans text-white/80">LayerTao</h3>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-400 dark:text-muted-foreground max-w-[60ch]">
-                  One entry point that abstracts subnet selection, balances traffic, and lets apps scale across the ecosystem effortlessly.
-                </p>
-              </div>
-            </div>
-          </button>
-
-          {/* Subnet Options */}
-          {subnetOptions.map((option) => (
-            <button
-              key={option.id}
-              onClick={() => option.available && setActiveSubnet(option.id)}
-              disabled={isLoading}
-              className={`group relative flex flex-col rounded-[32px] border p-6 text-left transition-all duration-300 ${
-                activeSubnet === option.id 
-                  ? "border-primary bg-card shadow-lg shadow-primary/5 ring-1 ring-primary/20 scale-[1.02] z-10" 
-                  : "border-border/50 bg-muted/20 hover:border-border hover:bg-muted/40 opacity-80"
-              } ${!option.available || isLoading ? "cursor-not-allowed" : "cursor-pointer"}`}
+          
+          {/* ========================================== */}
+          {/* LayerTao Unified Router (Gradient Border) */}
+          {/* ========================================== */}
+          {activeSubnet === "unified" ? (
+            <div
+              className="col-span-1 sm:col-span-2 md:col-span-3 xl:col-span-3 relative"
+              style={{
+                borderRadius: 28,
+                background: "linear-gradient(90deg, #2ECC71, #6C63FF)",
+                padding: "1.5px",
+                // REMOVED heavy directional shadows causing bleed. Using only the 1.5px gradient padding.
+              }}
             >
-              <div className="flex items-center justify-between">
-                <span className={`rounded-full border px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.2em] ${
-                  activeSubnet === option.id 
-                    ? "border-primary/30 bg-primary/10 text-primary"
-                    : "border-border bg-muted/50 text-muted-foreground"
-                }`}>
-                  Subnet
-                </span>
-                {option.available ? (
-                  <div className={`h-2 w-2 rounded-full border transition-colors ${
-                    activeSubnet === option.id ? "bg-transparent border-green-500" : "border-border bg-zinc-200 dark:bg-zinc-800 group-hover:bg-primary/50"
-                  }`} />
-                ) : (
-                  <span className="text-[7px] font-bold uppercase tracking-widest text-muted-foreground/60">
-                   Coming Soon
-                  </span>
-                )}
-              </div>
-              <div className="mt-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <SubnetIcon 
-                    iconString={option.iconString}
-                    className={`h-4 w-4 transition-colors ${
-                      activeSubnet === option.id ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
-                    }`} 
-                  />
-                  <h3 className={`text-sm font-semibold tracking-tight ${
-                    activeSubnet === option.id ? "text-primary" : "text-foreground"
-                  }`}>
-                    {option.title}
-                  </h3>
+              <button 
+                onClick={() => {
+                  if (!isLoading) {
+                    setActiveSubnet("unified");
+                    setRoutedSubnet(null);
+                  }
+                }}
+                disabled={isLoading}
+                className={`group relative w-full overflow-hidden rounded-[26.5px] bg-[#0B0B10] p-8 text-left shadow-2xl shadow-black/60 min-h-[160px] ${isLoading ? "cursor-not-allowed" : "cursor-pointer"}`}
+              >
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.1),transparent_40%)] dark:bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.05),transparent_40%)]" />
+                
+                {/* --- NEXUS BACKGROUND WATERMARK (UNIFIED) --- */}
+                <div className="absolute inset-0 flex items-center justify-end pointer-events-none opacity-50 dark:opacity-50 z-0 pr-4">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-[60%] h-[60%] max-w-[300px]">
+                    <defs>
+                      <filter id="neonGlow-unified" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
+                        <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur1" />
+                        <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="blur2" />
+                        <feMerge>
+                          <feMergeNode in="blur2" />
+                          <feMergeNode in="blur1" />
+                          <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                      </filter>
+                    </defs>
+                    <style>
+                      {`
+                      .orbit-unified {
+                        animation: spin-unified 20s linear infinite;
+                        transform-origin: 60px 60px;
+                      }
+                      @keyframes spin-unified {
+                        100% { transform: rotate(360deg); }
+                      }
+                      `}
+                    </style>
+                    <g className="orbit-unified">
+                      <circle cx="60" cy="60" r="48" fill="none" stroke="#475569" strokeWidth="1" strokeDasharray="2 4" opacity="0.3" />
+                      <path d="M 25.36 40 A 40 40 0 1 1 20 60" fill="none" stroke="#475569" strokeWidth="1.5" strokeDasharray="4 6" opacity="0.4" />
+                      <path d="M 60 100 A 40 40 0 1 1 100 60" fill="none" stroke="#00E676" strokeWidth="3" filter="url(#neonGlow-unified)" />
+                      <path d="M 100 60 A 40 40 0 1 1 25.36 40" fill="none" stroke="#00E5FF" strokeWidth="3" filter="url(#neonGlow-unified)" />
+                      <path d="M 25.36 40 A 40 40 0 1 1 60 100" fill="none" stroke="#D500F9" strokeWidth="3" filter="url(#neonGlow-unified)" />
+                      <circle cx="60" cy="100" r="5" fill="#00E676" filter="url(#neonGlow-unified)" />
+                      <circle cx="60" cy="100" r="1.5" fill="#ffffff" />
+                      <circle cx="100" cy="60" r="5" fill="#00E5FF" filter="url(#neonGlow-unified)" />
+                      <circle cx="100" cy="60" r="1.5" fill="#ffffff" />
+                      <circle cx="25.36" cy="40" r="5" fill="#D500F9" filter="url(#neonGlow-unified)" />
+                      <circle cx="25.36" cy="40" r="1.5" fill="#ffffff" />
+                    </g>
+                  </svg>
                 </div>
-                <p className="text-[11px] font-medium text-muted-foreground/80 mb-2 truncate">{option.subtitle}</p>
-                <p className="text-[11px] leading-relaxed text-muted-foreground line-clamp-3">
-                  {option.description}
-                </p>
+
+                {/* Ambient Glow Behind Orb */}
+                <div className={`absolute right-[-10px] top-1/2 -translate-y-1/2 w-40 h-40 rounded-full bg-blue-500/20 blur-[80px] pointer-events-none transition-all duration-300 opacity-100`} />
+
+                {/* --- PREMIUM ORB VISUALIZATION (SIGNATURE ELEMENT) --- */}
+                <div className={`absolute right-8 top-1/2 -translate-y-1/2 w-44 h-44 pointer-events-none z-10 opacity-100 transition-all duration-300 scale-105`}>
+                  <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" className="w-full h-full drop-shadow-2xl">
+                    <defs>
+                      <filter id="orbGlow" x="-50%" y="-50%" width="200%" height="200%">
+                        <feGaussianBlur stdDeviation="3" result="blur" />
+                        <feMerge>
+                          <feMergeNode in="blur" />
+                          <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                      </filter>
+                      <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stopColor="#34D399" />
+                        <stop offset="25%" stopColor="#22D3EE" />
+                        <stop offset="50%" stopColor="#60A5FA" />
+                        <stop offset="75%" stopColor="#C084FC" />
+                        <stop offset="100%" stopColor="#34D399" />
+                      </linearGradient>
+                    </defs>
+                    <style>{`
+                        .orb-ring { animation: spin 20s linear infinite; transform-origin: 60px 60px; }
+                        .orb-breathe { animation: breathe 5s ease-in-out infinite; transform-origin: 60px 60px; }
+                        .orb-node { animation: pulse-node 3s ease-in-out infinite alternate; }
+                        .orb-node-1 { animation: pulse-node 3s ease-in-out infinite alternate 0.75s; }
+                        .orb-node-2 { animation: pulse-node 3s ease-in-out infinite alternate 1.5s; }
+                        .orb-node-3 { animation: pulse-node 3s ease-in-out infinite alternate 2.25s; }
+                        @keyframes spin { 100% { transform: rotate(360deg); } }
+                        @keyframes breathe { 0%, 100% { transform: scale(0.95); } 50% { transform: scale(1.05); } }
+                        @keyframes pulse-node { 0% { r: 3.5; opacity: 0.5; } 100% { r: 5.5; opacity: 1; } }
+                    `}</style>
+
+                    <circle cx="60" cy="60" r="46" fill="none" stroke="url(#ringGrad)" strokeWidth="1.5" strokeOpacity="0.4" strokeDasharray="3 6" />
+                    <g className="orb-breathe">
+                      <g className="orb-ring">
+                        <path d="M 60 106 A 46 46 0 1 1 106 60" fill="none" stroke="#34D399" strokeWidth="2.5" filter="url(#orbGlow)" />
+                        <path d="M 106 60 A 46 46 0 1 1 60 14" fill="none" stroke="#22D3EE" strokeWidth="2.5" filter="url(#orbGlow)" />
+                        <path d="M 60 14 A 46 46 0 1 1 14 60" fill="none" stroke="#60A5FA" strokeWidth="2.5" filter="url(#orbGlow)" />
+                        <path d="M 14 60 A 46 46 0 1 1 60 106" fill="none" stroke="#C084FC" strokeWidth="2.5" filter="url(#orbGlow)" />
+                        <circle cx="60" cy="106" r="3.5" fill="#34D399" filter="url(#orbGlow)" className="orb-node" />
+                        <circle cx="106" cy="60" r="3.5" fill="#22D3EE" filter="url(#orbGlow)" className="orb-node-1" />
+                        <circle cx="60" cy="14" r="3.5" fill="#60A5FA" filter="url(#orbGlow)" className="orb-node-2" />
+                        <circle cx="14" cy="60" r="3.5" fill="#C084FC" filter="url(#orbGlow)" className="orb-node-3" />
+                      </g>
+                    </g>
+                  </svg>
+                </div>
+
+                <div className="relative flex h-full flex-col z-10">
+                  <div className="flex items-center justify-between">
+                    <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] border border-white/20 bg-white/5 text-white/90 shadow-sm`}>
+                      Unified
+                    </span>
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm border bg-green-500/15 text-green-400 border-green-500/30 shadow-[0_0_15px_rgba(74,222,128,0.15)]`}>
+                      Selected
+                    </span>
+                  </div>
+                  
+                  <div className="mt-6">
+                    <h3 className="text-2xl font-semibold tracking-[-0.02em] font-sans text-white mb-5">
+                      LayerTao
+                    </h3>
+                    <p className="text-base leading-[1.6] text-white/70 max-w-[90%]">
+                      One entry point that abstracts subnet selection, balances traffic, and lets apps scale across the ecosystem effortlessly.
+                    </p>
+                  </div>
+                </div>
+              </button>
+            </div>
+          ) : (
+            <button 
+              onClick={() => {
+                if (!isLoading) {
+                  setActiveSubnet("unified");
+                  setRoutedSubnet(null);
+                }
+              }}
+              disabled={isLoading}
+              className={`group relative col-span-1 sm:col-span-2 md:col-span-3 xl:col-span-3 overflow-hidden rounded-[28px] border border-white/10 bg-[#050A14] hover:border-white/15 hover:bg-[#080F20] hover:-translate-y-0.5 transition-all duration-300 ease-out p-8 text-left shadow-2xl shadow-black/60 min-h-[160px] ${isLoading ? "cursor-not-allowed" : "cursor-pointer"}`}
+            >
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.1),transparent_40%)] dark:bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.05),transparent_40%)]" />
+              <div className="relative flex h-full flex-col z-10">
+                <div className="flex items-center justify-between">
+                  <span className="rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] border border-white/20 bg-white/5 text-white/90 shadow-sm">
+                    Unified
+                  </span>
+                  <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm border bg-white/5 text-white/70 border-white/10 shadow-sm">
+                    Available
+                  </span>
+                </div>
+                
+                <div className="mt-6">
+                  <h3 className="text-2xl font-semibold tracking-[-0.02em] font-sans text-white mb-5">
+                    LayerTao
+                  </h3>
+                  <p className="text-base leading-[1.6] text-white/70 max-w-[90%]">
+                    One entry point that abstracts subnet selection, balances traffic, and lets apps scale across the ecosystem effortlessly.
+                  </p>
+                </div>
               </div>
             </button>
-          ))}
+          )}
+
+          {/* ================================================== */}
+          {/* Subnet Options with Gradient Border for Selected */}
+          {/* ================================================== */}
+          {subnetOptions.map((option) => {
+            const isSelected = activeSubnet === option.id;
+
+            return isSelected ? (
+              <div
+                key={option.id}
+                className="relative flex flex-col rounded-[28px] z-10"
+                style={{
+                  // Using 135deg diagonal ensures the colors wrap evenly around a square card
+                  background: "linear-gradient(135deg, #2ECC71, #6C63FF)",
+                  padding: "1.5px",
+                  // NO box-shadow here. Removed to prevent the heavy color bleed bug completely.
+                }}
+              >
+              <button
+  onClick={() => option.available && setActiveSubnet(option.id)}
+  disabled={isLoading}
+  className={`group relative w-full flex flex-col rounded-[26.5px] px-5 pt-5 pb-20 text-left bg-[#0B0B10] transition-all duration-300 shadow-[inset_0_0_25px_-10px_rgba(108,99,255,0.2),inset_0_0_25px_-10px_rgba(46,204,113,0.2)] min-h-[180px] overflow-hidden ${!option.available || isLoading ? "cursor-not-allowed" : "cursor-pointer"}`}
+>
+                  {/* --- NEXUS BACKGROUND WATERMARK (SUBNETS) --- */}
+                  <div className="absolute inset-0 flex items-center justify-end pointer-events-none opacity-50 dark:opacity-50 z-0 pr-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-[50%] h-[50%]">
+                      <defs>
+                        <filter id={`neonGlow-${option.id}`} x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
+                          <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur1" />
+                          <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="blur2" />
+                          <feMerge>
+                            <feMergeNode in="blur2" />
+                            <feMergeNode in="blur1" />
+                            <feMergeNode in="SourceGraphic" />
+                          </feMerge>
+                        </filter>
+                      </defs>
+                      <style>
+                        {`
+                        .orbit-${option.id} {
+                          animation: spin-${option.id} 20s linear infinite;
+                          transform-origin: 60px 60px;
+                        }
+                        @keyframes spin-${option.id} {
+                          100% { transform: rotate(360deg); }
+                        }
+                        `}
+                      </style>
+                      <g className={`orbit-${option.id}`}>
+                        <circle cx="60" cy="60" r="48" fill="none" stroke="#475569" strokeWidth="1" strokeDasharray="2 4" opacity="0.3" />
+                        <path d="M 25.36 40 A 40 40 0 1 1 20 60" fill="none" stroke="#475569" strokeWidth="1.5" strokeDasharray="4 6" opacity="0.4" />
+                        <path d="M 60 100 A 40 40 0 1 1 100 60" fill="none" stroke="#00E676" strokeWidth="3" filter={`url(#neonGlow-${option.id})`} />
+                        <path d="M 100 60 A 40 40 0 1 1 25.36 40" fill="none" stroke="#00E5FF" strokeWidth="3" filter={`url(#neonGlow-${option.id})`} />
+                        <path d="M 25.36 40 A 40 40 0 1 1 60 100" fill="none" stroke="#D500F9" strokeWidth="3" filter={`url(#neonGlow-${option.id})`} />
+                        <circle cx="60" cy="100" r="5" fill="#00E676" filter={`url(#neonGlow-${option.id})`} />
+                        <circle cx="60" cy="100" r="1.5" fill="#ffffff" />
+                        <circle cx="100" cy="60" r="5" fill="#00E5FF" filter={`url(#neonGlow-${option.id})`} />
+                        <circle cx="100" cy="60" r="1.5" fill="#ffffff" />
+                        <circle cx="25.36" cy="40" r="5" fill="#D500F9" filter={`url(#neonGlow-${option.id})`} />
+                        <circle cx="25.36" cy="40" r="1.5" fill="#ffffff" />
+                      </g>
+                    </svg>
+                  </div>
+
+                  <div className="relative z-10 w-full h-full flex flex-col">
+                    <div className="flex items-center justify-between">
+                      <span className="rounded-full border px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.2em] border-primary/30 bg-primary/10 text-primary">
+                        Subnet
+                      </span>
+                      <div className="h-2 w-2 rounded-full border bg-transparent border-green-500" />
+                    </div>
+                    <div className="mt-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <SubnetIcon 
+                          iconString={option.iconString}
+                          className="h-4 w-4 text-primary"
+                        />
+                        <h3 className="text-sm font-semibold tracking-tight text-primary">
+                          {option.title}
+                        </h3>
+                      </div>
+                      <p className="text-[11px] font-medium text-muted-foreground/80 mb-2 truncate">{option.subtitle}</p>
+                      <p className="text-[11px] leading-relaxed text-muted-foreground line-clamp-3">
+                        {option.description}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            ) : (
+              <button
+                key={option.id}
+                onClick={() => option.available && setActiveSubnet(option.id)}
+                disabled={isLoading}
+                className={`group relative flex flex-col rounded-[32px] border p-6 text-left transition-all duration-300 ${
+                  "border-border/50 bg-muted/20 hover:border-border hover:bg-muted/40 opacity-80"
+                } ${!option.available || isLoading ? "cursor-not-allowed" : "cursor-pointer"}`}
+              >
+                <div className="relative z-10 w-full h-full flex flex-col">
+                  <div className="flex items-center justify-between">
+                    <span className="rounded-full border px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.2em] border-border bg-muted/50 text-muted-foreground">
+                      Subnet
+                    </span>
+                    {option.available ? (
+                      <div className="h-2 w-2 rounded-full border border-border bg-zinc-200 dark:bg-zinc-800 group-hover:bg-primary/50" />
+                    ) : (
+                      <span className="text-[7px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                       Coming Soon
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <SubnetIcon 
+                        iconString={option.iconString}
+                        className="h-4 w-4 text-muted-foreground group-hover:text-foreground"
+                      />
+                      <h3 className="text-sm font-semibold tracking-tight text-foreground">
+                        {option.title}
+                      </h3>
+                    </div>
+                    <p className="text-[11px] font-medium text-muted-foreground/80 mb-2 truncate">{option.subtitle}</p>
+                    <p className="text-[11px] leading-relaxed text-muted-foreground line-clamp-3">
+                      {option.description}
+                    </p>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </section>
+
+      {/* Nexus Persistent Context Layer — UI mockup, not wired to live context state */}
+      <NexusContextCard />
 
       {/* Workspace Grid */}
       <section className="grid gap-6 lg:grid-cols-[1fr_300px] xl:grid-cols-[1fr_340px]">
