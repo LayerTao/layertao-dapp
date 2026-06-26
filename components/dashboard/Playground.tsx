@@ -1000,8 +1000,10 @@ export function Playground() {
                       }`}>
                         {msg.role === "user" ? (
                           <div className="flex flex-col gap-2">
-                            {msg.image && (
-                              <img src={msg.image} alt="Uploaded" className="rounded-lg max-h-48 object-contain" />
+                            {(msg.image || msg.hasImage) && (
+                              msg.image
+                                ? <img src={msg.image} alt="Uploaded" className="rounded-lg max-h-48 object-contain" />
+                                : <div className="rounded-lg bg-muted/30 h-32 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
                             )}
                             {msg.content && <div className="whitespace-pre-wrap">{msg.content}</div>}
                           </div>
@@ -1030,8 +1032,10 @@ export function Playground() {
                                     </ReactMarkdown>
                                   </div>
                                 )}
-                                {msg.image && (
-                                  <img src={msg.image} alt="Generated" className="rounded-xl w-full max-h-96 object-contain" />
+                                {(msg.image || msg.hasImage) && (
+                                  msg.image
+                                    ? <img src={msg.image} alt="Generated" className="rounded-xl w-full max-h-96 object-contain" />
+                                    : <div className="rounded-xl bg-muted/30 h-48 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
                                 )}
                               </div>
                             );
