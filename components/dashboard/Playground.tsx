@@ -1,13 +1,17 @@
 "use client";
 
 import { useRef, useEffect, useState } from "react";
-import { usePlaygroundStore, type Message, type Conversation } from "@/store/playground-store";
-import { 
-  Play, 
-  Save, 
-  Send, 
-  Layout, 
-  CheckCircle2, 
+import {
+  usePlaygroundStore,
+  type Message,
+  type Conversation,
+} from "@/store/playground-store";
+import {
+  Play,
+  Save,
+  Send,
+  Layout,
+  CheckCircle2,
   Image as ImageIcon,
   Loader2,
   Network,
@@ -20,7 +24,11 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { RoutingVisual, SubnetIcon, type SubnetOption } from "@/components/layout/RoutingVisual";
+import {
+  RoutingVisual,
+  SubnetIcon,
+  type SubnetOption,
+} from "@/components/layout/RoutingVisual";
 import { NexusContextCard } from "./NexusContextCard";
 import {
   Select,
@@ -34,23 +42,38 @@ import remarkGfm from "remark-gfm";
 import { useAccount } from "wagmi";
 import { formatUnits } from "viem";
 import useTokenBalance from "@/hooks/useTokenBalance";
-import { TOKEN_ADDRESS, GATING_THRESHOLD, WHITELISTED_ADDRESSES } from "@/lib/constants";
+import {
+  TOKEN_ADDRESS,
+  GATING_THRESHOLD,
+  WHITELISTED_ADDRESSES,
+} from "@/lib/constants";
 import { Lock } from "lucide-react";
 import { useAppKit } from "@reown/appkit/react";
-
 
 // --- PRE-FORMATTED MODEL LIST ---
 const availableModels = [
   { id: "Qwen/Qwen3-32B-TEE", company: "Qwen", name: "Qwen3-32B-TEE" },
   // { id: "openai/gpt-oss-120b-TEE", company: "OpenAI", name: "gpt-oss-120b-TEE" },
   // { id: "deepseek-ai/DeepSeek-V3.1-TEE", company: "DeepSeek", name: "DeepSeek-V3.1-TEE" },
-  { id: "deepseek-ai/DeepSeek-V3.2-TEE", company: "DeepSeek", name: "DeepSeek-V3.2-TEE" },
+  {
+    id: "deepseek-ai/DeepSeek-V3.2-TEE",
+    company: "DeepSeek",
+    name: "DeepSeek-V3.2-TEE",
+  },
   // { id: "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE", company: "Moonshot AI", name: "Qwen3-235B-A22B-Instruct-2507-TEE" },
-  { id: "MiniMaxAI/MiniMax-M2.5-TEE", company: "MiniMax", name: "MiniMax-M2.5-TEE" },
-  { id: "zai-org/GLM-5-Turbo", company: "Chutes AI", name: "zai-org/GLM-5-Turbo" },
+  {
+    id: "MiniMaxAI/MiniMax-M2.5-TEE",
+    company: "MiniMax",
+    name: "MiniMax-M2.5-TEE",
+  },
+  {
+    id: "zai-org/GLM-5-Turbo",
+    company: "Chutes AI",
+    name: "zai-org/GLM-5-Turbo",
+  },
   // { id: "tngtech/DeepSeek-TNG-R1T2-Chimera-TEE", company: "Chutes AI", name: "tngtech/DeepSeek-TNG-R1T2-Chimera-TEE" },
   // { id: "Qwen/Qwen3-Coder-Next-TEE", company: "Qwen", name: "Qwen/Qwen3-Coder-Next-TEE" },
-  ];
+];
 
 // --- HELPER FUNCTION TO PARSE <think> TAGS ---
 function parseMessageContent(content: string) {
@@ -62,7 +85,9 @@ function parseMessageContent(content: string) {
   if (thinkMatch) {
     thinkContent = thinkMatch[1].trim();
     // Remove the think block from the main content
-    mainContent = content.replace(/<think>([\s\S]*?)(?:<\/think>|$)/, '').trim();
+    mainContent = content
+      .replace(/<think>([\s\S]*?)(?:<\/think>|$)/, "")
+      .trim();
   }
 
   return { thinkContent, mainContent };
@@ -70,16 +95,26 @@ function parseMessageContent(content: string) {
 
 export function Playground() {
   const {
-    input, setInput,
-    messages, setMessages,
-    isLoading, setIsLoading,
-    activeSubnet, setActiveSubnet,
-    selectedModel, setSelectedModel,
-    routedSubnet, setRoutedSubnet,
-    routingStep, setRoutingStep,
-    conversationId, setConversationId,
-    isHistoryLoading, setIsHistoryLoading,
-    conversations, setConversations,
+    input,
+    setInput,
+    messages,
+    setMessages,
+    isLoading,
+    setIsLoading,
+    activeSubnet,
+    setActiveSubnet,
+    selectedModel,
+    setSelectedModel,
+    routedSubnet,
+    setRoutedSubnet,
+    routingStep,
+    setRoutingStep,
+    conversationId,
+    setConversationId,
+    isHistoryLoading,
+    setIsHistoryLoading,
+    conversations,
+    setConversations,
     clearCurrentChat,
   } = usePlaygroundStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -108,19 +143,24 @@ export function Playground() {
     // During streaming, users can scroll up to read without being yanked back.
     const container = messagesContainerRef.current;
     if (container) {
-      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+      const isNearBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight <
+        80;
       if (isNearBottom) {
         scrollToBottom();
       }
     }
   }, [messages]);
 
-  const { isConnected,address} = useAccount();
+  const { isConnected, address } = useAccount();
 
   // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setChatDropdownOpen(false);
       }
     }
@@ -138,7 +178,9 @@ export function Playground() {
       }
       try {
         setIsHistoryLoading(true);
-        const res = await fetch(`/api/chat/conversations?walletAddress=${address}`);
+        const res = await fetch(
+          `/api/chat/conversations?walletAddress=${address}`,
+        );
         if (res.ok) {
           const data = await res.json();
           setConversations(data.conversations || []);
@@ -158,7 +200,9 @@ export function Playground() {
       setIsHistoryLoading(true);
 
       // Fetch context state FIRST so sparkline history is set before card remounts.
-      const ctxRes = await fetch(`/api/chat/context-state?conversationId=${encodeURIComponent(convId)}`);
+      const ctxRes = await fetch(
+        `/api/chat/context-state?conversationId=${encodeURIComponent(convId)}`,
+      );
       let ctxData: any = null;
       if (ctxRes.ok) {
         ctxData = await ctxRes.json();
@@ -181,12 +225,14 @@ export function Playground() {
         for (const m of msgs) {
           if (m.hasImage && !m.image && m.id) {
             fetch(`/api/chat/message-image?id=${encodeURIComponent(m.id)}`)
-              .then(r => r.json())
-              .then(imgData => {
+              .then((r) => r.json())
+              .then((imgData) => {
                 if (imgData.image) {
-                  setMessages((prev: any[]) => prev.map(pm =>
-                    pm.id === m.id ? { ...pm, image: imgData.image } : pm
-                  ));
+                  setMessages((prev: any[]) =>
+                    prev.map((pm) =>
+                      pm.id === m.id ? { ...pm, image: imgData.image } : pm,
+                    ),
+                  );
                 }
               })
               .catch(() => {});
@@ -205,9 +251,12 @@ export function Playground() {
   const deleteConversation = async (convId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const res = await fetch(`/api/chat/conversations?conversationId=${convId}`, { method: 'DELETE' });
+      const res = await fetch(
+        `/api/chat/conversations?conversationId=${convId}`,
+        { method: "DELETE" },
+      );
       if (res.ok) {
-        setConversations(conversations.filter(c => c.id !== convId));
+        setConversations(conversations.filter((c) => c.id !== convId));
         if (conversationId === convId) {
           clearCurrentChat();
         }
@@ -231,44 +280,54 @@ export function Playground() {
     // Refresh the conversations list in the background
     if (address) {
       fetch(`/api/chat/conversations?walletAddress=${address}`)
-        .then(res => res.json())
-        .then(data => setConversations(data.conversations || []))
+        .then((res) => res.json())
+        .then((data) => setConversations(data.conversations || []))
         .catch(() => {});
     }
   };
 
   const { balance, decimals, isFetched } = useTokenBalance(TOKEN_ADDRESS);
 
-   // Check if address is whitelisted (case-insensitive)
-  const isWhitelisted = address && WHITELISTED_ADDRESSES.some(
-    addr => addr.toLowerCase() === address.toLowerCase()
-  );
+  // Check if address is whitelisted (case-insensitive)
+  const isWhitelisted =
+    address &&
+    WHITELISTED_ADDRESSES.some(
+      (addr) => addr.toLowerCase() === address.toLowerCase(),
+    );
 
   // Determine if the user is gated
   // If not connected, or if fetched and balance is below threshold
-  const isGated = isConnected && !isWhitelisted && isFetched && balance !== undefined && balance < GATING_THRESHOLD;
+  const isGated =
+    isConnected &&
+    !isWhitelisted &&
+    isFetched &&
+    balance !== undefined &&
+    balance < GATING_THRESHOLD;
   const showLock = !isConnected || isGated;
   const needsConnection = !isConnected;
   const { open } = useAppKit();
 
-  const thresholdFormatted = GATING_THRESHOLD > BigInt(0) && typeof decimals === 'number'
-    ? formatUnits(GATING_THRESHOLD, decimals) 
-    : "0";
+  const thresholdFormatted =
+    GATING_THRESHOLD > BigInt(0) && typeof decimals === "number"
+      ? formatUnits(GATING_THRESHOLD, decimals)
+      : "0";
 
   const subnetOptions = [
     {
       id: "subnet-64",
       title: "Chutes AI",
       subtitle: "Deep Reasoning",
-      description: "Designed for complex AI workloads requiring deeper context and multi-step thinking.",
-      iconString: "chutes-ai", 
+      description:
+        "Designed for complex AI workloads requiring deeper context and multi-step thinking.",
+      iconString: "chutes-ai",
       available: true,
     },
     {
       id: "subnet-65",
       title: "Image Gen",
       subtitle: "Image Generation",
-      description: "Generate images from text prompts using the Z Image Trubo model.",
+      description:
+        "Generate images from text prompts using the Z Image Trubo model.",
       iconString: "imagegen",
       available: true,
     },
@@ -276,21 +335,21 @@ export function Playground() {
       id: "subnet-66",
       title: "Bitmind",
       subtitle: "AI Image Detection",
-      description: "Detect whether an image is AI-generated or real using Bitmind's deepfake detection model.",
+      description:
+        "Detect whether an image is AI-generated or real using Bitmind's deepfake detection model.",
       iconString: "bitmind",
       available: true,
     },
-   {
+    {
       id: "subnet-22",
       title: "Desearch",
       subtitle: "AI Search Engine",
-      description: "Access real-time web, news, and social media data through a single, unified API designed to power AI agents and intelligent applications.",
-      iconString: "desearch", 
+      description:
+        "Access real-time web, news, and social media data through a single, unified API designed to power AI agents and intelligent applications.",
+      iconString: "desearch",
       available: true,
     },
   ];
-
-
 
   const handleSend = async () => {
     const isBitmind = activeSubnet === "subnet-66";
@@ -305,8 +364,16 @@ export function Playground() {
     const imageToSend = hasImage ? uploadedImage : null;
     const videoFileToSend = hasVideo ? uploadedVideoFile : null;
     // UI caption: only what the user typed, empty if none
-    const displayContent = hasText ? input : (hasVideo ? `Video: ${uploadedVideoFile!.name}` : "");
-    const userMessage: Message = { role: "user", content: displayContent, image: imageToSend || undefined };
+    const displayContent = hasText
+      ? input
+      : hasVideo
+        ? `Video: ${uploadedVideoFile!.name}`
+        : "";
+    const userMessage: Message = {
+      role: "user",
+      content: displayContent,
+      image: imageToSend || undefined,
+    };
     const newMessages = [...messages, userMessage];
 
     setMessages(newMessages);
@@ -315,11 +382,11 @@ export function Playground() {
     setUploadedVideoFile(null);
     setRoutedSubnet(null);
     setIsLoading(true);
-    setRoutingStep('routing');
+    setRoutingStep("routing");
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 800));
-      setRoutingStep('processing');
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      setRoutingStep("processing");
 
       let endpoint = "/api/chat/unified";
       let isFormData = false;
@@ -395,12 +462,18 @@ export function Playground() {
                 const data = JSON.parse(line);
                 if (data.type === "routing") {
                   setRoutedSubnet(data.subnetID);
-                } else if (data.type === "conversation_id" && data.conversationId) {
+                } else if (
+                  data.type === "conversation_id" &&
+                  data.conversationId
+                ) {
                   handleNewConversationId(data.conversationId);
                 } else if (data.type === "image" && data.imageBase64) {
-                  setMessages((prev) => [...prev, { role: "assistant", content: "", image: data.imageBase64 }]);
-                  setRoutingStep('received');
-                  setTimeout(() => setRoutingStep('idle'), 5000);
+                  setMessages((prev) => [
+                    ...prev,
+                    { role: "assistant", content: "", image: data.imageBase64 },
+                  ]);
+                  setRoutingStep("received");
+                  setTimeout(() => setRoutingStep("idle"), 5000);
                 } else if (data.type === "context_metadata") {
                   setContextMetrics({
                     contextSizeChars: data.contextSizeChars,
@@ -411,26 +484,32 @@ export function Playground() {
                   });
                 } else if (data.type === "token" && data.text) {
                   setIsLoading(false); // stop spinner on first token — streaming has begun
-                  setRoutingStep('received');
+                  setRoutingStep("received");
                   setMessages((prev) => {
                     const copy = [...prev];
                     const last = copy[copy.length - 1];
                     if (last && last.role === "assistant" && !last.image) {
-                      copy[copy.length - 1] = { ...last, content: last.content + data.text };
+                      copy[copy.length - 1] = {
+                        ...last,
+                        content: last.content + data.text,
+                      };
                     } else {
                       copy.push({ role: "assistant", content: data.text });
                     }
                     return copy;
                   });
                 } else if (data.type === "content_done") {
-                  setTimeout(() => setRoutingStep('idle'), 2000);
+                  setTimeout(() => setRoutingStep("idle"), 2000);
                 } else if (data.type === "content" && data.reply) {
-                  setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
-                  setRoutingStep('received');
-                  setTimeout(() => setRoutingStep('idle'), 5000);
+                  setMessages((prev) => [
+                    ...prev,
+                    { role: "assistant", content: data.reply },
+                  ]);
+                  setRoutingStep("received");
+                  setTimeout(() => setRoutingStep("idle"), 5000);
                 } else if (data.error) {
                   console.error(data.error);
-                  setRoutingStep('idle');
+                  setRoutingStep("idle");
                 }
               } catch (e) {
                 console.error("Error parsing stream line:", e);
@@ -449,20 +528,26 @@ export function Playground() {
           setContextMetrics(data.contextMetadata);
         }
         if (data.imageBase64) {
-          setRoutingStep('received');
-          setMessages((prev) => [...prev, { role: "assistant", content: " ", image: data.imageBase64 }]);
-          setTimeout(() => setRoutingStep('idle'), 5000);
+          setRoutingStep("received");
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: " ", image: data.imageBase64 },
+          ]);
+          setTimeout(() => setRoutingStep("idle"), 5000);
         } else if (data.reply) {
-          setRoutingStep('received');
-          setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
-          setTimeout(() => setRoutingStep('idle'), 5000);
+          setRoutingStep("received");
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: data.reply },
+          ]);
+          setTimeout(() => setRoutingStep("idle"), 5000);
         } else {
-          setRoutingStep('idle');
+          setRoutingStep("idle");
           console.error(data.error);
         }
       }
     } catch (error) {
-      setRoutingStep('idle');
+      setRoutingStep("idle");
       console.error("Failed to send message:", error);
     } finally {
       setIsLoading(false);
@@ -487,9 +572,12 @@ export function Playground() {
       <section className="rounded-[28px] border border-border bg-card p-6 shadow-sm">
         <div className="mb-6 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-foreground tracking-tight">Choose your network</h2>
+            <h2 className="text-lg font-semibold text-foreground tracking-tight">
+              Choose your network
+            </h2>
             <p className="text-sm text-muted-foreground">
-              Pick a subnet directly or use LayerTao to unify routing across them.
+              Pick a subnet directly or use LayerTao to unify routing across
+              them.
             </p>
           </div>
           <span className="inline-flex w-fit rounded-full border border-border bg-muted/50 px-3 py-1 text-[10px] uppercase font-bold tracking-widest text-muted-foreground">
@@ -498,21 +586,12 @@ export function Playground() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-          
           {/* ========================================== */}
           {/* LayerTao Unified Router (Gradient Border) */}
           {/* ========================================== */}
           {activeSubnet === "unified" ? (
-            <div
-              className="col-span-1 sm:col-span-2 md:col-span-3 xl:col-span-3 relative"
-              style={{
-                borderRadius: 28,
-                background: "linear-gradient(90deg, #2ECC71, #6C63FF)",
-                padding: "1.5px",
-                // REMOVED heavy directional shadows causing bleed. Using only the 1.5px gradient padding.
-              }}
-            >
-              <button 
+            <div className="col-span-1 sm:col-span-2 md:col-span-3 xl:col-span-3 relative rounded-[28px] p-[1px] bg-[linear-gradient(135deg,#2ECC71,#6C63FF)] min-h-[160px] flex flex-col">
+              <button
                 onClick={() => {
                   if (!isLoading) {
                     setActiveSubnet("unified");
@@ -520,124 +599,39 @@ export function Playground() {
                   }
                 }}
                 disabled={isLoading}
-                className={`group relative w-full overflow-hidden rounded-[26.5px] bg-[#0B0B10] p-8 text-left shadow-2xl shadow-black/60 min-h-[160px] ${isLoading ? "cursor-not-allowed" : "cursor-pointer"}`}
+                className={`group relative w-full flex-1 h-full overflow-hidden rounded-[27px] bg-[#0B0B10] p-8 text-left shadow-2xl shadow-black/60 ${isLoading ? "cursor-not-allowed" : "cursor-pointer"}`}
               >
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.1),transparent_40%)] dark:bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.05),transparent_40%)]" />
-                
-                {/* --- NEXUS BACKGROUND WATERMARK (UNIFIED) --- */}
-                <div className="absolute inset-0 flex items-center justify-end pointer-events-none opacity-50 dark:opacity-50 z-0 pr-4">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-[60%] h-[60%] max-w-[300px]">
-                    <defs>
-                      <filter id="neonGlow-unified" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
-                        <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur1" />
-                        <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="blur2" />
-                        <feMerge>
-                          <feMergeNode in="blur2" />
-                          <feMergeNode in="blur1" />
-                          <feMergeNode in="SourceGraphic" />
-                        </feMerge>
-                      </filter>
-                    </defs>
-                    <style>
-                      {`
-                      .orbit-unified {
-                        animation: spin-unified 20s linear infinite;
-                        transform-origin: 60px 60px;
-                      }
-                      @keyframes spin-unified {
-                        100% { transform: rotate(360deg); }
-                      }
-                      `}
-                    </style>
-                    <g className="orbit-unified">
-                      <circle cx="60" cy="60" r="48" fill="none" stroke="#475569" strokeWidth="1" strokeDasharray="2 4" opacity="0.3" />
-                      <path d="M 25.36 40 A 40 40 0 1 1 20 60" fill="none" stroke="#475569" strokeWidth="1.5" strokeDasharray="4 6" opacity="0.4" />
-                      <path d="M 60 100 A 40 40 0 1 1 100 60" fill="none" stroke="#00E676" strokeWidth="3" filter="url(#neonGlow-unified)" />
-                      <path d="M 100 60 A 40 40 0 1 1 25.36 40" fill="none" stroke="#00E5FF" strokeWidth="3" filter="url(#neonGlow-unified)" />
-                      <path d="M 25.36 40 A 40 40 0 1 1 60 100" fill="none" stroke="#D500F9" strokeWidth="3" filter="url(#neonGlow-unified)" />
-                      <circle cx="60" cy="100" r="5" fill="#00E676" filter="url(#neonGlow-unified)" />
-                      <circle cx="60" cy="100" r="1.5" fill="#ffffff" />
-                      <circle cx="100" cy="60" r="5" fill="#00E5FF" filter="url(#neonGlow-unified)" />
-                      <circle cx="100" cy="60" r="1.5" fill="#ffffff" />
-                      <circle cx="25.36" cy="40" r="5" fill="#D500F9" filter="url(#neonGlow-unified)" />
-                      <circle cx="25.36" cy="40" r="1.5" fill="#ffffff" />
-                    </g>
-                  </svg>
-                </div>
-
-                {/* Ambient Glow Behind Orb */}
-                <div className={`absolute right-[-10px] top-1/2 -translate-y-1/2 w-40 h-40 rounded-full bg-blue-500/20 blur-[80px] pointer-events-none transition-all duration-300 opacity-100`} />
-
-                {/* --- PREMIUM ORB VISUALIZATION (SIGNATURE ELEMENT) --- */}
-                <div className={`absolute right-8 top-1/2 -translate-y-1/2 w-44 h-44 pointer-events-none z-10 opacity-100 transition-all duration-300 scale-105`}>
-                  <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" className="w-full h-full drop-shadow-2xl">
-                    <defs>
-                      <filter id="orbGlow" x="-50%" y="-50%" width="200%" height="200%">
-                        <feGaussianBlur stdDeviation="3" result="blur" />
-                        <feMerge>
-                          <feMergeNode in="blur" />
-                          <feMergeNode in="SourceGraphic" />
-                        </feMerge>
-                      </filter>
-                      <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0%" stopColor="#34D399" />
-                        <stop offset="25%" stopColor="#22D3EE" />
-                        <stop offset="50%" stopColor="#60A5FA" />
-                        <stop offset="75%" stopColor="#C084FC" />
-                        <stop offset="100%" stopColor="#34D399" />
-                      </linearGradient>
-                    </defs>
-                    <style>{`
-                        .orb-ring { animation: spin 20s linear infinite; transform-origin: 60px 60px; }
-                        .orb-breathe { animation: breathe 5s ease-in-out infinite; transform-origin: 60px 60px; }
-                        .orb-node { animation: pulse-node 3s ease-in-out infinite alternate; }
-                        .orb-node-1 { animation: pulse-node 3s ease-in-out infinite alternate 0.75s; }
-                        .orb-node-2 { animation: pulse-node 3s ease-in-out infinite alternate 1.5s; }
-                        .orb-node-3 { animation: pulse-node 3s ease-in-out infinite alternate 2.25s; }
-                        @keyframes spin { 100% { transform: rotate(360deg); } }
-                        @keyframes breathe { 0%, 100% { transform: scale(0.95); } 50% { transform: scale(1.05); } }
-                        @keyframes pulse-node { 0% { r: 3.5; opacity: 0.5; } 100% { r: 5.5; opacity: 1; } }
-                    `}</style>
-
-                    <circle cx="60" cy="60" r="46" fill="none" stroke="url(#ringGrad)" strokeWidth="1.5" strokeOpacity="0.4" strokeDasharray="3 6" />
-                    <g className="orb-breathe">
-                      <g className="orb-ring">
-                        <path d="M 60 106 A 46 46 0 1 1 106 60" fill="none" stroke="#34D399" strokeWidth="2.5" filter="url(#orbGlow)" />
-                        <path d="M 106 60 A 46 46 0 1 1 60 14" fill="none" stroke="#22D3EE" strokeWidth="2.5" filter="url(#orbGlow)" />
-                        <path d="M 60 14 A 46 46 0 1 1 14 60" fill="none" stroke="#60A5FA" strokeWidth="2.5" filter="url(#orbGlow)" />
-                        <path d="M 14 60 A 46 46 0 1 1 60 106" fill="none" stroke="#C084FC" strokeWidth="2.5" filter="url(#orbGlow)" />
-                        <circle cx="60" cy="106" r="3.5" fill="#34D399" filter="url(#orbGlow)" className="orb-node" />
-                        <circle cx="106" cy="60" r="3.5" fill="#22D3EE" filter="url(#orbGlow)" className="orb-node-1" />
-                        <circle cx="60" cy="14" r="3.5" fill="#60A5FA" filter="url(#orbGlow)" className="orb-node-2" />
-                        <circle cx="14" cy="60" r="3.5" fill="#C084FC" filter="url(#orbGlow)" className="orb-node-3" />
-                      </g>
-                    </g>
-                  </svg>
-                </div>
 
                 <div className="relative flex h-full flex-col z-10">
                   <div className="flex items-center justify-between">
-                    <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] border border-white/20 bg-white/5 text-white/90 shadow-sm`}>
+                    <span
+                      className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] border border-white/20 bg-white/5 text-white/90 shadow-sm`}
+                    >
                       Unified
                     </span>
-                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm border bg-green-500/15 text-green-400 border-green-500/30 shadow-[0_0_15px_rgba(74,222,128,0.15)]`}>
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm border bg-green-500/15 text-green-400 border-green-500/30 shadow-[0_0_15px_rgba(74,222,128,0.15)]`}
+                    >
                       Selected
                     </span>
                   </div>
-                  
+
                   <div className="mt-6">
                     <h3 className="text-2xl font-semibold tracking-[-0.02em] font-sans text-white mb-5">
                       LayerTao
                     </h3>
                     <p className="text-base leading-[1.6] text-white/70 max-w-[90%]">
-                      One entry point that abstracts subnet selection, balances traffic, and lets apps scale across the ecosystem effortlessly.
+                      One entry point that abstracts subnet selection, balances
+                      traffic, and lets apps scale across the ecosystem
+                      effortlessly.
                     </p>
                   </div>
                 </div>
               </button>
             </div>
           ) : (
-            <button 
+            <button
               onClick={() => {
                 if (!isLoading) {
                   setActiveSubnet("unified");
@@ -657,13 +651,15 @@ export function Playground() {
                     Available
                   </span>
                 </div>
-                
+
                 <div className="mt-6">
                   <h3 className="text-2xl font-semibold tracking-[-0.02em] font-sans text-white mb-5">
                     LayerTao
                   </h3>
                   <p className="text-base leading-[1.6] text-white/70 max-w-[90%]">
-                    One entry point that abstracts subnet selection, balances traffic, and lets apps scale across the ecosystem effortlessly.
+                    One entry point that abstracts subnet selection, balances
+                    traffic, and lets apps scale across the ecosystem
+                    effortlessly.
                   </p>
                 </div>
               </div>
@@ -676,121 +672,43 @@ export function Playground() {
           {subnetOptions.map((option) => {
             const isSelected = activeSubnet === option.id;
 
-            return isSelected ? (
-              <div
-                key={option.id}
-                className="relative flex flex-col rounded-[28px] z-10"
-                style={{
-                  // Using 135deg diagonal ensures the colors wrap evenly around a square card
-                  background: "linear-gradient(135deg, #2ECC71, #6C63FF)",
-                  padding: "1.5px",
-                  // NO box-shadow here. Removed to prevent the heavy color bleed bug completely.
-                }}
-              >
-              <button
-  onClick={() => option.available && setActiveSubnet(option.id)}
-  disabled={isLoading}
-  className={`group relative w-full flex flex-col rounded-[26.5px] px-5 pt-5 pb-20 text-left bg-[#0B0B10] transition-all duration-300 shadow-[inset_0_0_25px_-10px_rgba(108,99,255,0.2),inset_0_0_25px_-10px_rgba(46,204,113,0.2)] min-h-[180px] overflow-hidden ${!option.available || isLoading ? "cursor-not-allowed" : "cursor-pointer"}`}
->
-                  {/* --- NEXUS BACKGROUND WATERMARK (SUBNETS) --- */}
-                  <div className="absolute inset-0 flex items-center justify-end pointer-events-none opacity-50 dark:opacity-50 z-0 pr-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" className="w-[50%] h-[50%]">
-                      <defs>
-                        <filter id={`neonGlow-${option.id}`} x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
-                          <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur1" />
-                          <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="blur2" />
-                          <feMerge>
-                            <feMergeNode in="blur2" />
-                            <feMergeNode in="blur1" />
-                            <feMergeNode in="SourceGraphic" />
-                          </feMerge>
-                        </filter>
-                      </defs>
-                      <style>
-                        {`
-                        .orbit-${option.id} {
-                          animation: spin-${option.id} 20s linear infinite;
-                          transform-origin: 60px 60px;
-                        }
-                        @keyframes spin-${option.id} {
-                          100% { transform: rotate(360deg); }
-                        }
-                        `}
-                      </style>
-                      <g className={`orbit-${option.id}`}>
-                        <circle cx="60" cy="60" r="48" fill="none" stroke="#475569" strokeWidth="1" strokeDasharray="2 4" opacity="0.3" />
-                        <path d="M 25.36 40 A 40 40 0 1 1 20 60" fill="none" stroke="#475569" strokeWidth="1.5" strokeDasharray="4 6" opacity="0.4" />
-                        <path d="M 60 100 A 40 40 0 1 1 100 60" fill="none" stroke="#00E676" strokeWidth="3" filter={`url(#neonGlow-${option.id})`} />
-                        <path d="M 100 60 A 40 40 0 1 1 25.36 40" fill="none" stroke="#00E5FF" strokeWidth="3" filter={`url(#neonGlow-${option.id})`} />
-                        <path d="M 25.36 40 A 40 40 0 1 1 60 100" fill="none" stroke="#D500F9" strokeWidth="3" filter={`url(#neonGlow-${option.id})`} />
-                        <circle cx="60" cy="100" r="5" fill="#00E676" filter={`url(#neonGlow-${option.id})`} />
-                        <circle cx="60" cy="100" r="1.5" fill="#ffffff" />
-                        <circle cx="100" cy="60" r="5" fill="#00E5FF" filter={`url(#neonGlow-${option.id})`} />
-                        <circle cx="100" cy="60" r="1.5" fill="#ffffff" />
-                        <circle cx="25.36" cy="40" r="5" fill="#D500F9" filter={`url(#neonGlow-${option.id})`} />
-                        <circle cx="25.36" cy="40" r="1.5" fill="#ffffff" />
-                      </g>
-                    </svg>
-                  </div>
-
-                  <div className="relative z-10 w-full h-full flex flex-col">
-                    <div className="flex items-center justify-between">
-                      <span className="rounded-full border px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.2em] border-primary/30 bg-primary/10 text-primary">
-                        Subnet
-                      </span>
-                      <div className="h-2 w-2 rounded-full border bg-transparent border-green-500" />
-                    </div>
-                    <div className="mt-4">
-                      <div className="flex items-center gap-2 mb-1">
-                        <SubnetIcon 
-                          iconString={option.iconString}
-                          className="h-4 w-4 text-primary"
-                        />
-                        <h3 className="text-sm font-semibold tracking-tight text-primary">
-                          {option.title}
-                        </h3>
-                      </div>
-                      <p className="text-[11px] font-medium text-muted-foreground/80 mb-2 truncate">{option.subtitle}</p>
-                      <p className="text-[11px] leading-relaxed text-muted-foreground line-clamp-3">
-                        {option.description}
-                      </p>
-                    </div>
-                  </div>
-                </button>
-              </div>
-            ) : (
+            return (
               <button
                 key={option.id}
                 onClick={() => option.available && setActiveSubnet(option.id)}
                 disabled={isLoading}
                 className={`group relative flex flex-col rounded-[32px] border p-6 text-left transition-all duration-300 ${
-                  "border-border/50 bg-muted/20 hover:border-border hover:bg-muted/40 opacity-80"
+                  isSelected
+                    ? "border-white/40 bg-[#0B0B10] opacity-100 shadow-[inset_0_0_25px_-10px_rgba(108,99,255,0.2),inset_0_0_25px_-10px_rgba(46,204,113,0.2)]"
+                    : "border-border/50 bg-muted/20 hover:border-border hover:bg-muted/40 opacity-80"
                 } ${!option.available || isLoading ? "cursor-not-allowed" : "cursor-pointer"}`}
               >
                 <div className="relative z-10 w-full h-full flex flex-col">
                   <div className="flex items-center justify-between">
-                    <span className="rounded-full border px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.2em] border-border bg-muted/50 text-muted-foreground">
+                    <span className={`rounded-full border px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.2em] ${isSelected ? "border-primary/30 bg-primary/10 text-primary" : "border-border bg-muted/50 text-muted-foreground"}`}>
                       Subnet
                     </span>
                     {option.available ? (
-                      <div className="h-2 w-2 rounded-full border border-border bg-zinc-200 dark:bg-zinc-800 group-hover:bg-primary/50" />
+                      <div className={`h-2 w-2 rounded-full border ${isSelected ? "bg-transparent border-green-500" : "border-border bg-zinc-200 dark:bg-zinc-800 group-hover:bg-primary/50"}`} />
                     ) : (
                       <span className="text-[7px] font-bold uppercase tracking-widest text-muted-foreground/60">
-                       Coming Soon
+                        Coming Soon
                       </span>
                     )}
                   </div>
                   <div className="mt-4">
                     <div className="flex items-center gap-2 mb-1">
-                      <SubnetIcon 
+                      <SubnetIcon
                         iconString={option.iconString}
-                        className="h-4 w-4 text-muted-foreground group-hover:text-foreground"
+                        className={`h-4 w-4 ${isSelected ? "text-primary" : "text-muted-foreground group-hover:text-foreground"}`}
                       />
-                      <h3 className="text-sm font-semibold tracking-tight text-foreground">
+                      <h3 className={`text-sm font-semibold tracking-tight ${isSelected ? "text-primary" : "text-foreground"}`}>
                         {option.title}
                       </h3>
                     </div>
-                    <p className="text-[11px] font-medium text-muted-foreground/80 mb-2 truncate">{option.subtitle}</p>
+                    <p className="text-[11px] font-medium text-muted-foreground/80 mb-2 truncate">
+                      {option.subtitle}
+                    </p>
                     <p className="text-[11px] leading-relaxed text-muted-foreground line-clamp-3">
                       {option.description}
                     </p>
@@ -826,7 +744,7 @@ export function Playground() {
                 Compose prompts and test subnet behavior in one place.
               </p>
             </div>
-            
+
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               {activeSubnet === "subnet-64" && (
                 <Select value={selectedModel} onValueChange={setSelectedModel}>
@@ -835,7 +753,11 @@ export function Playground() {
                   </SelectTrigger>
                   <SelectContent>
                     {availableModels.map((model) => (
-                      <SelectItem key={model.id} value={model.id} className="py-2 cursor-pointer">
+                      <SelectItem
+                        key={model.id}
+                        value={model.id}
+                        className="py-2 cursor-pointer"
+                      >
                         <div className="flex flex-col items-start gap-0.5">
                           <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
                             {model.company}
@@ -849,7 +771,6 @@ export function Playground() {
                   </SelectContent>
                 </Select>
               )}
-              
 
               {/* Chat History Dropdown */}
               {isConnected && (
@@ -860,7 +781,9 @@ export function Playground() {
                   >
                     <MessageSquare className="h-3 w-3" />
                     Chats
-                    <ChevronDown className={`h-3 w-3 transition-transform ${chatDropdownOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown
+                      className={`h-3 w-3 transition-transform ${chatDropdownOpen ? "rotate-180" : ""}`}
+                    />
                   </button>
 
                   {chatDropdownOpen && (
@@ -882,7 +805,9 @@ export function Playground() {
                           </div>
                         ) : conversations.length === 0 ? (
                           <div className="py-6 text-center">
-                            <p className="text-xs text-muted-foreground">No chats yet</p>
+                            <p className="text-xs text-muted-foreground">
+                              No chats yet
+                            </p>
                           </div>
                         ) : (
                           conversations.map((conv) => (
@@ -891,18 +816,24 @@ export function Playground() {
                               onClick={() => loadConversation(conv.id)}
                               className={`flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors group ${
                                 conversationId === conv.id
-                                  ? 'bg-primary/5 border-l-2 border-primary'
-                                  : 'hover:bg-muted/50 border-l-2 border-transparent'
+                                  ? "bg-primary/5 border-l-2 border-primary"
+                                  : "hover:bg-muted/50 border-l-2 border-transparent"
                               }`}
                             >
                               <div className="flex-1 min-w-0 mr-2">
-                                <p className={`text-xs font-medium truncate ${
-                                  conversationId === conv.id ? 'text-primary' : 'text-foreground'
-                                }`}>
-                                  {conv.title || 'Untitled Chat'}
+                                <p
+                                  className={`text-xs font-medium truncate ${
+                                    conversationId === conv.id
+                                      ? "text-primary"
+                                      : "text-foreground"
+                                  }`}
+                                >
+                                  {conv.title || "Untitled Chat"}
                                 </p>
                                 <p className="text-[10px] text-muted-foreground mt-0.5">
-                                  {new Date(conv.created_at).toLocaleDateString()}
+                                  {new Date(
+                                    conv.created_at,
+                                  ).toLocaleDateString()}
                                 </p>
                               </div>
                               <button
@@ -921,17 +852,16 @@ export function Playground() {
                 </div>
               )}
 
-                 <div className="flex items-center gap-1.5 rounded-full border border-healthy/20 bg-healthy/10 px-2.5 py-1 text-[10px] font-bold text-healthy uppercase tracking-wider shrink-0">
+              <div className="flex items-center gap-1.5 rounded-full border border-healthy/20 bg-healthy/10 px-2.5 py-1 text-[10px] font-bold text-healthy uppercase tracking-wider shrink-0">
                 <CheckCircle2 className="h-3 w-3" /> Ready
               </div>
             </div>
-
           </div>
 
           <div className="flex-1 p-6 flex flex-col gap-6">
             <div className="flex-1 min-h-[400px] max-h-[600px] rounded-[20px] border border-dashed border-border bg-muted/10 flex flex-col relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background/50 pointer-events-none" />
-              
+
               {showLock ? (
                 <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/60 backdrop-blur-md p-6 md:p-8 text-center animate-in fade-in duration-500">
                   <div className="relative mb-6">
@@ -941,21 +871,23 @@ export function Playground() {
                     </div>
                   </div>
                   <h3 className="text-xl md:text-2xl font-sans tracking-tight font-bold text-foreground mb-2 md:mb-3">
-                    {needsConnection ? "Connect Wallet to Access" : "Token Gated Access"}
+                    {needsConnection
+                      ? "Connect Wallet to Access"
+                      : "Token Gated Access"}
                   </h3>
                   <p className="text-sm text-muted-foreground max-w-[300px] leading-relaxed mb-8">
-                    {needsConnection 
-                      ? "The Playground requires a connected wallet and a minimum token balance to use." 
+                    {needsConnection
+                      ? "The Playground requires a connected wallet and a minimum token balance to use."
                       : `You need at least ${thresholdFormatted} $LAYERTAO tokens to use the Playground.`}
                   </p>
-                  
+
                   {!isConnected ? (
                     <div className="flex flex-col gap-2 w-full max-w-[240px]">
                       <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
                         Get Started
                       </p>
                       {/* Note: Clicking this triggers the wallet modal */}
-                      <Button 
+                      <Button
                         onClick={() => open()}
                         className="w-full bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20 rounded-xl h-12 font-bold transition-all active:scale-95"
                       >
@@ -967,12 +899,25 @@ export function Playground() {
                       <div className="px-6 py-3 rounded-2xl bg-muted/50 border border-border flex items-center gap-3">
                         <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
                         <span className="text-xs font-bold text-foreground uppercase tracking-wider">
-                          Balance: {balance !== undefined && balance !== null && typeof decimals === 'number' ? formatUnits(balance as bigint, decimals) : "0"} $LAYERTAO
+                          Balance:{" "}
+                          {balance !== undefined &&
+                          balance !== null &&
+                          typeof decimals === "number"
+                            ? formatUnits(balance as bigint, decimals)
+                            : "0"}{" "}
+                          $LAYERTAO
                         </span>
                       </div>
-                      <Button variant="outline" onClick={() => {
-                        window.open("https://app.uniswap.org/explore/tokens/ethereum/0xA73Cc56A437718F6da80dd7F5e26a8E24B9F852c?inputCurrency=NATIVE", "_blank");
-                      }} className="">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          window.open(
+                            "https://app.uniswap.org/explore/tokens/ethereum/0xA73Cc56A437718F6da80dd7F5e26a8E24B9F852c?inputCurrency=NATIVE",
+                            "_blank",
+                          );
+                        }}
+                        className=""
+                      >
                         Get $LAYERTAO
                       </Button>
                     </div>
@@ -980,45 +925,68 @@ export function Playground() {
                 </div>
               ) : null}
 
-              <div ref={messagesContainerRef} className="w-full h-full p-6 overflow-y-auto z-10 flex flex-col gap-4">
+              <div
+                ref={messagesContainerRef}
+                className="w-full h-full p-6 overflow-y-auto z-10 flex flex-col gap-4"
+              >
                 {messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full gap-3 text-center opacity-40">
                     <Network className="h-10 w-10 text-muted-foreground mb-1" />
                     <p className="text-sm font-medium">Workspace is empty</p>
-                    <p className="text-xs">Your conversation will appear here.</p>
+                    <p className="text-xs">
+                      Your conversation will appear here.
+                    </p>
                   </div>
                 ) : (
                   messages.map((msg, index) => (
-                    <div 
-                      key={index} 
+                    <div
+                      key={index}
                       className={`flex w-full ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                     >
-                      <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed overflow-x-auto ${
-                        msg.role === "user" 
-                          ? "bg-primary text-primary-foreground rounded-tr-sm" 
-                          : "bg-muted text-foreground rounded-tl-sm border border-border/50"
-                      }`}>
+                      <div
+                        className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed overflow-x-auto ${
+                          msg.role === "user"
+                            ? "bg-primary text-primary-foreground rounded-tr-sm"
+                            : "bg-muted text-foreground rounded-tl-sm border border-border/50"
+                        }`}
+                      >
                         {msg.role === "user" ? (
                           <div className="flex flex-col gap-2">
-                            {(msg.image || msg.hasImage) && (
-                              msg.image
-                                ? <img src={msg.image} alt="Uploaded" className="rounded-lg max-h-48 object-contain" />
-                                : <div className="rounded-lg bg-muted/30 h-32 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+                            {(msg.image || msg.hasImage) &&
+                              (msg.image ? (
+                                <img
+                                  src={msg.image}
+                                  alt="Uploaded"
+                                  className="rounded-lg max-h-48 object-contain"
+                                />
+                              ) : (
+                                <div className="rounded-lg bg-muted/30 h-32 flex items-center justify-center">
+                                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                </div>
+                              ))}
+                            {msg.content && (
+                              <div className="whitespace-pre-wrap">
+                                {msg.content}
+                              </div>
                             )}
-                            {msg.content && <div className="whitespace-pre-wrap">{msg.content}</div>}
                           </div>
                         ) : (
                           (() => {
-                            const { thinkContent, mainContent } = parseMessageContent(msg.content);
-                            
+                            const { thinkContent, mainContent } =
+                              parseMessageContent(msg.content);
+
                             return (
                               <div className="flex flex-col gap-3">
                                 {thinkContent && (
                                   <details className="group border border-border/50 rounded-xl overflow-hidden bg-background/50 open:bg-background/80 transition-colors">
                                     <summary className="cursor-pointer px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2 hover:bg-muted/40 transition-colors select-none">
                                       <Brain className="h-3.5 w-3.5" />
-                                      <span className="group-open:hidden">View Thinking Process</span>
-                                      <span className="hidden group-open:inline">Hide Thinking Process</span>
+                                      <span className="group-open:hidden">
+                                        View Thinking Process
+                                      </span>
+                                      <span className="hidden group-open:inline">
+                                        Hide Thinking Process
+                                      </span>
                                     </summary>
                                     <div className="p-4 pt-2 text-[13px] text-muted-foreground/80 border-t border-border/50 whitespace-pre-wrap font-mono leading-relaxed max-h-[300px] overflow-y-auto">
                                       {thinkContent}
@@ -1032,11 +1000,18 @@ export function Playground() {
                                     </ReactMarkdown>
                                   </div>
                                 )}
-                                {(msg.image || msg.hasImage) && (
-                                  msg.image
-                                    ? <img src={msg.image} alt="Generated" className="rounded-xl w-full max-h-96 object-contain" />
-                                    : <div className="rounded-xl bg-muted/30 h-48 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-                                )}
+                                {(msg.image || msg.hasImage) &&
+                                  (msg.image ? (
+                                    <img
+                                      src={msg.image}
+                                      alt="Generated"
+                                      className="rounded-xl w-full max-h-96 object-contain"
+                                    />
+                                  ) : (
+                                    <div className="rounded-xl bg-muted/30 h-48 flex items-center justify-center">
+                                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                    </div>
+                                  ))}
                               </div>
                             );
                           })()
@@ -1056,9 +1031,14 @@ export function Playground() {
               </div>
             </div>
 
-            <div className={`flex items-center gap-3 rounded-[24px] border border-border bg-background px-4 py-3 shadow-inner focus-within:border-primary/50 transition-colors group ${showLock ? "opacity-50 pointer-events-none" : ""}`}>
+            <div
+              className={`flex items-center gap-3 rounded-[24px] border border-border bg-background px-4 py-3 shadow-inner focus-within:border-primary/50 transition-colors group ${showLock ? "opacity-50 pointer-events-none" : ""}`}
+            >
               {(activeSubnet === "subnet-66" || activeSubnet === "unified") && (
-                <label className={`h-11 w-11 shrink-0 flex items-center justify-center rounded-md cursor-pointer text-muted-foreground hover:text-foreground transition-colors ${isLoading || showLock ? "opacity-50 pointer-events-none" : ""}`} title="Upload image for detection">
+                <label
+                  className={`h-11 w-11 shrink-0 flex items-center justify-center rounded-md cursor-pointer text-muted-foreground hover:text-foreground transition-colors ${isLoading || showLock ? "opacity-50 pointer-events-none" : ""}`}
+                  title="Upload image for detection"
+                >
                   <Upload className="h-5 w-5" />
                   <input
                     type="file"
@@ -1112,7 +1092,15 @@ export function Playground() {
 
               <Input
                 className="flex-1 bg-transparent border-none focus-visible:ring-0 shadow-none text-base placeholder:text-muted-foreground/40 font-medium"
-                placeholder={showLock ? "Connect wallet to start" : activeSubnet === "subnet-66" ? (uploadedImage ? "Add a note (optional)..." : "Paste image/video URL or upload an image...") : "Ask anything or add your prompt here..."}
+                placeholder={
+                  showLock
+                    ? "Connect wallet to start"
+                    : activeSubnet === "subnet-66"
+                      ? uploadedImage
+                        ? "Add a note (optional)..."
+                        : "Paste image/video URL or upload an image..."
+                      : "Ask anything or add your prompt here..."
+                }
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -1121,34 +1109,81 @@ export function Playground() {
                 disabled={isLoading || showLock}
               />
 
-              {(activeSubnet === "subnet-66" || activeSubnet === "unified") && uploadedImage && (
-                <div className="shrink-0 relative group h-10 w-10 rounded-lg overflow-hidden border border-border/50">
-                  <img src={uploadedImage} alt="Preview" className="h-full w-full object-cover" />
-                  <button
-                    onClick={() => setUploadedImage(null)}
-                    className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity"
+              {(activeSubnet === "subnet-66" || activeSubnet === "unified") &&
+                uploadedImage && (
+                  <div className="shrink-0 relative group h-10 w-10 rounded-lg overflow-hidden border border-border/50">
+                    <img
+                      src={uploadedImage}
+                      alt="Preview"
+                      className="h-full w-full object-cover"
+                    />
+                    <button
+                      onClick={() => setUploadedImage(null)}
+                      className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="white"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              {(activeSubnet === "subnet-66" || activeSubnet === "unified") &&
+                uploadedVideoFile && (
+                  <div
+                    className="shrink-0 flex items-center gap-1 rounded-lg bg-muted/30 border border-border/50 pl-2 pr-1 py-1 text-[10px] text-muted-foreground max-w-[140px]"
+                    title={uploadedVideoFile.name}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                  </button>
-                </div>
-              )}
-              {(activeSubnet === "subnet-66" || activeSubnet === "unified") && uploadedVideoFile && (
-                <div className="shrink-0 flex items-center gap-1 rounded-lg bg-muted/30 border border-border/50 pl-2 pr-1 py-1 text-[10px] text-muted-foreground max-w-[140px]" title={uploadedVideoFile.name}>
-                  <Upload className="h-3 w-3 shrink-0" />
-                  <span className="truncate">{uploadedVideoFile.name}</span>
-                  <button
-                    onClick={() => setUploadedVideoFile(null)}
-                    className="shrink-0 h-4 w-4 flex items-center justify-center rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                  </button>
-                </div>
-              )}
+                    <Upload className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{uploadedVideoFile.name}</span>
+                    <button
+                      onClick={() => setUploadedVideoFile(null)}
+                      className="shrink-0 h-4 w-4 flex items-center justify-center rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="10"
+                        height="10"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
 
               <Button
                 size="icon"
                 onClick={handleSend}
-                disabled={activeSubnet === "subnet-66" ? (!uploadedImage && !uploadedVideoFile && !input.trim() || isLoading || showLock) : activeSubnet === "unified" ? (!uploadedImage && !uploadedVideoFile && !input.trim() || isLoading || showLock) : (!input.trim() || isLoading || showLock)}
+                disabled={
+                  activeSubnet === "subnet-66"
+                    ? (!uploadedImage && !uploadedVideoFile && !input.trim()) ||
+                      isLoading ||
+                      showLock
+                    : activeSubnet === "unified"
+                      ? (!uploadedImage &&
+                          !uploadedVideoFile &&
+                          !input.trim()) ||
+                        isLoading ||
+                        showLock
+                      : !input.trim() || isLoading || showLock
+                }
                 className="h-11 w-11 bg-foreground text-background hover:bg-foreground/90 shadow-lg transition-transform active:scale-95 shrink-0 disabled:opacity-50"
               >
                 <Send className="h-5 w-5" />
@@ -1156,14 +1191,19 @@ export function Playground() {
             </div>
             {sizeWarning && (
               <p className="text-[11px] text-red-500 font-medium px-1">
-                Video exceeds 10 MB limit. Paste a URL instead, or use a smaller file.
+                Video exceeds 10 MB limit. Paste a URL instead, or use a smaller
+                file.
               </p>
             )}
-            {activeSubnet === "subnet-66" && !uploadedImage && !uploadedVideoFile && !sizeWarning && (
-              <p className="text-[11px] text-amber-500 font-medium px-1">
-                Bitmind requires an image or video. Upload a file or paste a URL above.
-              </p>
-            )}
+            {activeSubnet === "subnet-66" &&
+              !uploadedImage &&
+              !uploadedVideoFile &&
+              !sizeWarning && (
+                <p className="text-[11px] text-amber-500 font-medium px-1">
+                  Bitmind requires an image or video. Upload a file or paste a
+                  URL above.
+                </p>
+              )}
           </div>
         </div>
 
@@ -1171,17 +1211,25 @@ export function Playground() {
         <aside className="flex flex-col gap-6">
           <div className="rounded-[32px] border border-border bg-card p-6 shadow-sm">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-sm font-bold text-foreground uppercase tracking-widest text-[11px]">Request Routing</h2>
+              <h2 className="text-sm font-bold text-foreground uppercase tracking-widest text-[11px]">
+                Request Routing
+              </h2>
               <div className="flex items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                <span className={`h-1.5 w-1.5 rounded-full ${isLoading ? "bg-amber-500 animate-pulse" : "bg-healthy"}`} />
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${isLoading ? "bg-amber-500 animate-pulse" : "bg-healthy"}`}
+                />
                 {isLoading ? "Active" : "Stable"}
               </div>
             </div>
 
-            <RoutingVisual 
-              activeSubnet={(activeSubnet === "unified" && routedSubnet) ? routedSubnet : activeSubnet} 
-              step={routingStep} 
-              subnets={subnetOptions} 
+            <RoutingVisual
+              activeSubnet={
+                activeSubnet === "unified" && routedSubnet
+                  ? routedSubnet
+                  : activeSubnet
+              }
+              step={routingStep}
+              subnets={subnetOptions}
               isUnifiedProtocol={activeSubnet === "unified"}
             />
 
@@ -1193,16 +1241,19 @@ export function Playground() {
                 Why LayerTao?
               </h3>
               <p className="text-[13px] leading-relaxed text-muted-foreground font-medium">
-                It presents a single abstraction layer over the subnet ecosystem so builders do not need to manually coordinate routing.
+                It presents a single abstraction layer over the subnet ecosystem
+                so builders do not need to manually coordinate routing.
               </p>
             </div>
           </div>
-          
+
           <div className="rounded-[28px] border border-dashed border-border p-6 flex flex-col items-center text-center gap-3">
             <div className="h-10 w-10 rounded-xl bg-muted/50 flex items-center justify-center">
               <Network className="h-5 w-5 text-muted-foreground" />
             </div>
-            <h4 className="text-xs font-bold uppercase tracking-widest text-foreground">Usage Statistics</h4>
+            <h4 className="text-xs font-bold uppercase tracking-widest text-foreground">
+              Usage Statistics
+            </h4>
             <div className="w-full bg-muted/50 rounded-full h-1.5 mt-1 overflow-hidden">
               <div className="bg-primary h-full w-[40%] rounded-full" />
             </div>
