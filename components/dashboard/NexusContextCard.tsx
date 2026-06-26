@@ -1,17 +1,123 @@
 "use client";
 
-const MOCK_CONTEXT_SIZE_KB = 1.24;
-const MOCK_CONTEXT_LIMIT_KB = 32;
-const MOCK_CONTEXT_HEALTH_PCT = 98;
-const MOCK_LAST_UPDATED = "2s ago";
+import { useEffect, useRef, useState } from "react";
 
-const SPARKLINE_POINTS = "0,15 8,8 16,13 24,6 32,11 40,5 48,9 56,14 64,7 72,12 80,4 88,10 96,6 104,11 112,3";
+const MAX_SPARKLINE_POINTS = 20;
 
-export function NexusContextCard() {
-  const fillPct = Math.min(
-    100,
-    Math.round((MOCK_CONTEXT_SIZE_KB / MOCK_CONTEXT_LIMIT_KB) * 100)
-  );
+function formatTokens(chars: number): string {
+  const tokens = Math.round(chars / 4);
+  if (tokens >= 10000) return `${Math.round(tokens / 1000)}K`;
+  if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}K`;
+  return `${tokens}`;
+}
+
+function formatRelativeTime(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diffSec = Math.max(0, Math.floor((now - then) / 1000));
+
+  if (diffSec < 5) return "just now";
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  return `${diffHr}h ago`;
+}
+
+/**
+ * Convert token-count history to SVG coordinates.
+ * Returns polyline points string for 2+ points, or a single dot coordinate for 1.
+ * Auto-scales Y axis to data range. More tokens → higher Y.
+ */
+function tokensToSvgCoords(history: number[]): { polyline: string; dot: { x: number; y: number } | null } {
+  if (history.length === 0) return { polyline: "", dot: null };
+
+  const maxX = 112;
+  const maxY = 18;
+  const minY = 3;
+  const dataMax = Math.max(...history);
+  const dataMin = Math.min(...history);
+  const range = dataMax - dataMin || 1;
+
+  const points = history.map((tokens, i) => {
+    const x = Math.round((i / Math.max(history.length - 1, 1)) * maxX);
+    const normalized = (tokens - dataMin) / range;
+    const y = Math.round(maxY - normalized * (maxY - minY));
+    return { x, y };
+  });
+
+  if (history.length === 1) {
+    return { polyline: "", dot: points[0] };
+  }
+
+  return {
+    polyline: points.map((p) => `${p.x},${p.y}`).join(" "),
+    dot: null,
+  };
+}
+
+export interface NexusContextCardProps {
+  contextSizeChars?: number;
+  contextLimitChars?: number;
+  healthPct?: number;
+  lastSummarizedAt?: string | null;
+  conversationId?: string | null;
+  /** Server-side sparkline history (persisted in DB, loaded on mount). */
+  sparklineHistory?: number[];
+}
+
+export function NexusContextCard({
+  contextSizeChars = 0,
+  contextLimitChars = 0,
+  healthPct = 100,
+  lastSummarizedAt,
+  conversationId: _conversationId,
+  sparklineHistory: seedHistory,
+}: NexusContextCardProps) {
+  // Only render real data when we have valid metrics. During transitions
+  // (conversation switch via key remount), props may briefly be zero.
+  const hasRealData = contextSizeChars > 0 && contextLimitChars > 0;
+
+  // Sparkline: seed from DB history, then accumulate live points.
+  // Component remounts on conversation switch (key={conversationId}).
+  const [sparklineHistory, setSparklineHistory] = useState<number[]>(() => {
+    if (seedHistory && seedHistory.length > 0) return seedHistory;
+    return contextSizeChars > 0 ? [Math.round(contextSizeChars / 4)] : [];
+  });
+
+  // Skip the first effect fire ONLY when mounting with pre-loaded data
+  // (conversation switch via context-state). When mounting from zero (new chat),
+  // we want to append the first real response immediately.
+  const mountedWithData = useRef(contextSizeChars > 0);
+  useEffect(() => {
+    if (contextSizeChars === 0) return;
+    if (mountedWithData.current) {
+      // Data was already present on mount (DB-loaded). Skip this fire
+      // to avoid appending a duplicate of the last persisted point.
+      mountedWithData.current = false;
+      return;
+    }
+    const currentTokens = Math.round(contextSizeChars / 4);
+    setSparklineHistory((prev) => {
+      if (prev.length === 0) return [currentTokens];
+      if (prev[prev.length - 1] === currentTokens) return prev;
+      const next = [...prev, currentTokens];
+      return next.length > MAX_SPARKLINE_POINTS
+        ? next.slice(next.length - MAX_SPARKLINE_POINTS)
+        : next;
+    });
+  }, [contextSizeChars, contextLimitChars]);
+
+  const fillPct = hasRealData
+    ? Math.min(100, Math.round((contextSizeChars / contextLimitChars) * 100))
+    : 0;
+  const sizeLabel = formatTokens(contextSizeChars);
+  const limitLabel = formatTokens(contextLimitChars);
+  const sparklineCoords = tokensToSvgCoords(sparklineHistory);
+
+  const lastUpdatedStr = lastSummarizedAt
+    ? formatRelativeTime(lastSummarizedAt)
+    : "No summary yet";
 
   return (
     <div
@@ -31,7 +137,7 @@ export function NexusContextCard() {
           backgroundColor: "#0B0B10",
           overflow: "hidden",
           position: "relative",
-          padding: "28px 28px",   // reduced horizontal padding from 32px → 28px
+          padding: "28px 28px",
           display: "flex",
           alignItems: "center",
           gap: 0,
@@ -57,7 +163,6 @@ export function NexusContextCard() {
               position: "relative",
             }}
           >
-            {/* --- ROTATING ORBITAL NEXUS LOGO --- */}
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="100%" height="100%">
               <defs>
                 <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
@@ -72,12 +177,12 @@ export function NexusContextCard() {
               </defs>
               <style>
                 {`
-                .orbit { 
-                  animation: spin 20s linear infinite; 
-                  transform-origin: 60px 60px; 
+                .orbit {
+                  animation: spin 20s linear infinite;
+                  transform-origin: 60px 60px;
                 }
-                @keyframes spin { 
-                  100% { transform: rotate(360deg); } 
+                @keyframes spin {
+                  100% { transform: rotate(360deg); }
                 }
                 `}
               </style>
@@ -127,13 +232,13 @@ export function NexusContextCard() {
           </div>
         </div>
 
-        {/* Divider – reduced margin */}
+        {/* Divider */}
         <div
           style={{
             width: 1,
             height: 36,
             backgroundColor: "rgba(255,255,255,0.1)",
-            margin: "0 8px",   // was 12px → 8px
+            margin: "0 8px",
             alignSelf: "center",
             flexShrink: 0,
           }}
@@ -173,7 +278,7 @@ export function NexusContextCard() {
                 fontWeight: 700,
                 textTransform: "uppercase",
                 letterSpacing: "0.08em",
-                color: "#34D399",
+                color: hasRealData ? "#34D399" : "#6B7280",
                 fontFamily: "Inter, Manrope, SF Pro Display, system-ui, sans-serif",
               }}
             >
@@ -182,12 +287,12 @@ export function NexusContextCard() {
                   width: 6,
                   height: 6,
                   borderRadius: "50%",
-                  backgroundColor: "#34D399",
-                  boxShadow: "0 0 7px rgba(52,211,153,0.6)",
+                  backgroundColor: hasRealData ? "#34D399" : "#6B7280",
+                  boxShadow: hasRealData ? "0 0 7px rgba(52,211,153,0.6)" : "none",
                   display: "inline-block",
                 }}
               />
-              ACTIVE
+              {hasRealData ? "ACTIVE" : "IDLE"}
             </span>
           </div>
 
@@ -205,7 +310,7 @@ export function NexusContextCard() {
               style={{
                 height: "100%",
                 borderRadius: 9999,
-                backgroundColor: "#34D399",
+                backgroundColor: hasRealData ? "#34D399" : "#4B5563",
                 width: `${fillPct}%`,
                 transition: "width 0.5s",
               }}
@@ -219,19 +324,19 @@ export function NexusContextCard() {
               lineHeight: 1.3,
             }}
           >
-            <span style={{ fontWeight: 700, color: "#34D399" }}>{MOCK_CONTEXT_SIZE_KB} KB</span>
+            <span style={{ fontWeight: 700, color: hasRealData ? "#34D399" : "#9CA3AF" }}>{sizeLabel}</span>
             <span style={{ color: "#9CA3AF" }}> / </span>
-            <span style={{ color: "#9CA3AF" }}>{MOCK_CONTEXT_LIMIT_KB} KB</span>
+            <span style={{ color: "#9CA3AF" }}>{limitLabel}</span>
           </div>
         </div>
 
-        {/* Divider – reduced margin */}
+        {/* Divider */}
         <div
           style={{
             width: 1,
             height: 36,
             backgroundColor: "rgba(255,255,255,0.1)",
-            margin: "0 8px",   // was 12px → 8px
+            margin: "0 8px",
             alignSelf: "center",
             flexShrink: 0,
           }}
@@ -275,19 +380,40 @@ export function NexusContextCard() {
                 <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="#34D399" floodOpacity="0.5" />
               </filter>
             </defs>
-            <path
-              d={`M 0 20 L ${SPARKLINE_POINTS} L 112 20 Z`}
-              fill="url(#sparkFill)"
-            />
-            <polyline
-              points={SPARKLINE_POINTS}
-              fill="none"
-              stroke="#34D399"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              filter="url(#sparkGlow)"
-            />
+            {sparklineCoords.polyline && (
+              <>
+                <path
+                  d={`M 0 20 L ${sparklineCoords.polyline} L 112 20 Z`}
+                  fill="url(#sparkFill)"
+                />
+                <polyline
+                  points={sparklineCoords.polyline}
+                  fill="none"
+                  stroke="#34D399"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  filter="url(#sparkGlow)"
+                />
+              </>
+            )}
+            {sparklineCoords.dot && !sparklineCoords.polyline && (
+              <line
+                x1="0"
+                y1={sparklineCoords.dot.y}
+                x2="112"
+                y2={sparklineCoords.dot.y}
+                stroke="#34D399"
+                strokeWidth="1.8"
+                strokeDasharray="3 3"
+                opacity="0.6"
+              />
+            )}
+            {!sparklineCoords.dot && !sparklineCoords.polyline && (
+              <text x="60" y="12" textAnchor="middle" fill="#4B5563" fontSize="9">
+                no data yet
+              </text>
+            )}
           </svg>
 
           <span
@@ -295,22 +421,22 @@ export function NexusContextCard() {
               fontSize: 14,
               fontWeight: 700,
               textTransform: "uppercase",
-              color: "#34D399",
+              color: hasRealData ? "#34D399" : "#9CA3AF",
               fontFamily: "Inter, Manrope, SF Pro Display, system-ui, sans-serif",
               lineHeight: 1.3,
             }}
           >
-            {MOCK_CONTEXT_HEALTH_PCT}% OPTIMAL
+            {hasRealData ? `${fillPct}% FULL` : "--% FULL"}
           </span>
         </div>
 
-        {/* Divider – reduced margin */}
+        {/* Divider */}
         <div
           style={{
             width: 1,
             height: 36,
             backgroundColor: "rgba(255,255,255,0.1)",
-            margin: "0 8px",   // was 12px → 8px
+            margin: "0 8px",
             alignSelf: "center",
             flexShrink: 0,
           }}
@@ -349,7 +475,7 @@ export function NexusContextCard() {
               lineHeight: 1.3,
             }}
           >
-            {MOCK_LAST_UPDATED}
+            {lastUpdatedStr}
           </span>
           <span
             style={{
@@ -359,7 +485,7 @@ export function NexusContextCard() {
               lineHeight: 1.3,
             }}
           >
-            Auto-compressing and optimizing...
+            {lastSummarizedAt ? "Last summary compression" : "No summarization has run yet"}
           </span>
         </div>
 
@@ -386,18 +512,15 @@ export function NexusContextCard() {
                 <stop offset="100%" stopColor="#6C63FF" stopOpacity="1" />
               </linearGradient>
             </defs>
-            {/* Latitude bands (dotted ellipses) */}
             <ellipse cx="100" cy="100" rx="95" ry="12" fill="none" stroke="url(#globeGrad)" strokeWidth="2" strokeDasharray="0 10" strokeLinecap="round" opacity="0.8" />
             <ellipse cx="100" cy="100" rx="85" ry="28" fill="none" stroke="url(#globeGrad)" strokeWidth="2" strokeDasharray="0 12" strokeLinecap="round" opacity="0.7" />
             <ellipse cx="100" cy="100" rx="70" ry="40" fill="none" stroke="url(#globeGrad)" strokeWidth="2" strokeDasharray="0 14" strokeLinecap="round" opacity="0.6" />
             <ellipse cx="100" cy="100" rx="50" ry="50" fill="none" stroke="url(#globeGrad)" strokeWidth="2" strokeDasharray="0 16" strokeLinecap="round" opacity="0.5" />
             <ellipse cx="100" cy="100" rx="28" ry="68" fill="none" stroke="url(#globeGrad)" strokeWidth="2" strokeDasharray="0 14" strokeLinecap="round" opacity="0.7" />
             <ellipse cx="100" cy="100" rx="12" ry="80" fill="none" stroke="url(#globeGrad)" strokeWidth="2" strokeDasharray="0 12" strokeLinecap="round" opacity="0.8" />
-            {/* Longitude bands (rotated ellipses) */}
             <ellipse cx="100" cy="100" rx="95" ry="95" fill="none" stroke="url(#globeGrad)" strokeWidth="1.8" strokeDasharray="0 15" strokeLinecap="round" opacity="0.55" transform="rotate(30 100 100)" />
             <ellipse cx="100" cy="100" rx="95" ry="95" fill="none" stroke="url(#globeGrad)" strokeWidth="1.8" strokeDasharray="0 15" strokeLinecap="round" opacity="0.55" transform="rotate(90 100 100)" />
             <ellipse cx="100" cy="100" rx="95" ry="95" fill="none" stroke="url(#globeGrad)" strokeWidth="1.8" strokeDasharray="0 15" strokeLinecap="round" opacity="0.55" transform="rotate(150 100 100)" />
-            {/* Scattered ambient dots */}
             <circle cx="30" cy="30" r="1.5" fill="#2ECC71" opacity="0.7" />
             <circle cx="170" cy="40" r="1" fill="#5EEAD4" opacity="0.6" />
             <circle cx="160" cy="160" r="2" fill="#6C63FF" opacity="0.5" />

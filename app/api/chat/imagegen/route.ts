@@ -4,38 +4,54 @@ import { createConversation, saveMessage } from "@/lib/supabase";
 
 export async function POST(req: Request) {
   try {
-    const { messages, walletAddress, conversationId } = await req.json();
+    const { message, walletAddress, conversationId } = await req.json();
+    const prompt = message?.content || "";
 
-    let convId = conversationId;
-    if (!convId && walletAddress && messages.length > 0) {
-      const contentStr = typeof messages.at(-1)?.content === 'string' ? messages.at(-1)?.content : "New Chat";
-      const title = contentStr.substring(0, 30) || "New Chat";
+    if (!prompt) {
+      return NextResponse.json({ error: "Missing prompt" }, { status: 400 });
+    }
+
+    let convId: string | null = conversationId ?? null;
+
+    if (!convId && walletAddress) {
+      const title = prompt.substring(0, 30) || "New Chat";
       const conv = await createConversation(walletAddress, title);
       convId = conv.id;
     }
 
-    const lastMessage = messages.at(-1)?.content || "";
-
-    if (convId && lastMessage) {
-      await saveMessage(convId, "user", lastMessage);
+    if (convId) {
+      await saveMessage(convId, "user", prompt);
     }
 
+    const apiKey = process.env.CHUTES_API_KEY;
+    if (!apiKey) throw new Error("Missing CHUTES_API_KEY");
+
+    const payload = {
+      seed: Math.floor(Math.random() * 1000000),
+      shift: 3,
+      width: 1024,
+      height: 1024,
+      prompt,
+      guidance_scale: 0,
+      max_sequence_length: 512,
+      num_inference_steps: 9,
+    };
+
     const response = await fetch(
-      "https://chutes-z-image-turbo.chutes.ai/generate",
+      "https://vonkaiser-z-image-turbo.chutes.ai/generate",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${process.env.CHUTES_API_KEY}`,
+          Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          prompt: lastMessage,
-        }),
+        body: JSON.stringify(payload),
       }
     );
 
     if (!response.ok) {
-      throw new Error(`Image generation API error: ${response.statusText}`);
+      const errText = await response.text().catch(() => "");
+      throw new Error(`Image generation failed: ${response.status} ${errText}`);
     }
 
     const contentType = response.headers.get("content-type") || "image/png";
@@ -54,7 +70,8 @@ export async function POST(req: Request) {
     });
 
   } catch (error) {
-    console.error("Image Generation API Error:", error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("Image Generation API Error:", msg);
     return NextResponse.json(
       { error: "Failed to generate image." },
       { status: 500 }

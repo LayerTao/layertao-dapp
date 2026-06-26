@@ -1,99 +1,155 @@
 // app/api/chat/chutesai/route.ts
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
-import { createConversation, saveMessage, updateConversationSummary, supabase } from "@/lib/supabase";
+import { createConversation, getConversationMemoryState, saveMessage, appendSparklinePoint } from "@/lib/supabase";
+import { computeKeptTailPhase1, maybeSummarizeConversationPhase1, KEPT_TOKEN_BUDGET, computeContextMetrics, getModelContextLimitTokens } from "@/lib/chatMemoryPhase1";
 
 const client = new OpenAI({
   apiKey: process.env.CHUTES_API_KEY,
   baseURL: process.env.CHUTES_BASE_URL,
 });
 
-async function summarizeBackground(convId: string, messagesToSummarize: any[], oldSummary: string) {
-  try {
-    const textToSummarize = messagesToSummarize.map(m => `${m.role}: ${m.content}`).join('\n');
-    const prompt = `Summarize the following old conversation context into a concise summary (max 150 words). Include important facts, user preferences, and key topics discussed.\n\nOld Summary: ${oldSummary}\n\nNew Messages to compress:\n${textToSummarize}`;
-    
-    const response = await client.chat.completions.create({
-      model: "Qwen/Qwen3-32B-TEE",
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: 200,
-    });
-    
-    const newSummary = response.choices[0].message.content;
-    if (newSummary) {
-      await updateConversationSummary(convId, newSummary);
-    }
-  } catch(e) {
-    console.error("Background summarization failed:", e);
-  }
-}
+const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export async function POST(req: Request) {
   try {
-    const { messages, model, walletAddress, conversationId } = await req.json();
+    const { message, model, walletAddress, conversationId, image } = await req.json();
 
-    let convId = conversationId;
+    const lastMessage =
+      message && typeof message.content === "string"
+        ? { role: "user" as const, content: message.content }
+        : null;
+
+    let convId: string | null = conversationId ?? null;
     let summary = "";
-    
-    if (!convId && walletAddress && messages.length > 0) {
-      const contentStr = typeof messages.at(-1)?.content === 'string' ? messages.at(-1)?.content : "New Chat";
-      const title = contentStr.substring(0, 30) || "New Chat";
+
+    // Resolve/create conversation
+    if (!convId && walletAddress && lastMessage?.content) {
+      const title = lastMessage.content.substring(0, 30) || "New Chat";
       const conv = await createConversation(walletAddress, title);
       convId = conv.id;
     } else if (convId) {
-      const { data } = await supabase.from('conversations').select('summary').eq('id', convId).single();
-      if (data) summary = data.summary || "";
+      const memoryState = await getConversationMemoryState(convId);
+      summary = memoryState.summary || "";
     }
 
-    const lastMessage = messages.at(-1);
+    // Save new user message (capture inserted row id for correct dedupe-by-id)
+    let newSavedUserMessageId: string | null = null;
     if (convId && lastMessage) {
-      await saveMessage(convId, "user", lastMessage.content);
+      const saved = await saveMessage(convId, "user", lastMessage.content, image);
+      newSavedUserMessageId = saved?.id ?? null;
     }
 
-    // Context Window Management
-    let messagesForSubnet = messages;
-    const WINDOW_SIZE = 20;
-    const userAssistMsgs = messages.filter((m: any) => m.role !== 'system');
-    const msgsToKeep = userAssistMsgs.slice(-WINDOW_SIZE);
-    const msgsToSummarize = userAssistMsgs.slice(0, -WINDOW_SIZE);
+    const sysPrompt = summary
+      ? `You are a helpful AI assistant.\n\nPrevious Conversation Summary:\n${summary}`
+      : "You are a helpful AI assistant.";
 
-    if (msgsToSummarize.length > 0 && convId) {
-      summarizeBackground(convId, msgsToSummarize, summary);
-    }
+    // Reconstruct unsummarized kept-tail and send as real chat messages.
+    const memoryState = convId ? await getConversationMemoryState(convId) : null;
+    const summarizedUntilMessageId = memoryState?.summarizedUntilMessageId ?? null;
 
-    let sysPrompt = "You are a helpful AI assistant.";
-    if (summary) {
-      sysPrompt += `\n\nPrevious Conversation Summary:\n${summary}`;
-    }
-
-    messagesForSubnet = [
-      { role: 'system', content: sysPrompt },
-      ...msgsToKeep
-    ];
-
-    const response = await client.chat.completions.create({
-      model: model, 
-      messages: messagesForSubnet,
-      max_tokens: 1024,
-      temperature: 0.5,
+    const { keptTailOldestFirst } = await computeKeptTailPhase1({
+      conversationId: convId!,
+      summarizedUntilMessageId,
+      keptTokenBudget: KEPT_TOKEN_BUDGET,
     });
+
+    // Dedupe by id: exclude the newest saved user message (id from messages table) from kept-tail.
+    const keptTailWithoutNewest = newSavedUserMessageId
+      ? keptTailOldestFirst.filter((m) => m.id !== newSavedUserMessageId)
+      : keptTailOldestFirst;
+
+    const chutesMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+        { role: "system" as const, content: sysPrompt },
+        ...keptTailWithoutNewest
+          .filter((m: { content: string | null }) => (m.content ?? "").trim().length > 0)
+          .map((m: { role: "user" | "assistant"; content: string | null }) => ({
+            role: m.role,
+            content: m.content as string,
+          })),
+        ...(lastMessage ? ([{ role: "user" as const, content: lastMessage.content }] as any) : []),
+      ];
+
+      console.log("[chutesai] chutesMessages order check:", JSON.stringify(chutesMessages.map(m => ({
+        role: m.role,
+        preview: typeof m.content === "string" ? m.content.substring(0, 60) : "",
+      }))));
+      console.log("[chutesai] CONTEXT SIZE:", JSON.stringify({
+        totalChars: chutesMessages.reduce((sum: number, m: any) => sum + (typeof m.content === "string" ? m.content.length : 0), 0),
+        estTokens: Math.round(chutesMessages.reduce((sum: number, m: any) => sum + (typeof m.content === "string" ? m.content.length : 0), 0) / 4),
+        msgCount: chutesMessages.length,
+        hasSummary: summary.length > 0,
+        summaryPreview: summary.substring(0, 80),
+      }));
+
+      console.log("[chutesai] calling Chutes with model:", JSON.stringify({
+        model,
+        baseURL: process.env.CHUTES_BASE_URL,
+        msgCount: chutesMessages.length,
+      }));
+
+      // Compute context metrics for NexusContextCard.
+      // Use TOTAL prompt chars vs model's actual context window.
+      const totalPromptChars = chutesMessages.reduce(
+        (sum: number, m: any) => sum + (typeof m.content === "string" ? m.content.length : 0),
+        0,
+      );
+      const modelLimit = getModelContextLimitTokens(model);
+      const contextMetrics = computeContextMetrics(totalPromptChars, modelLimit);
+      const lastSummarizedAt = memoryState?.summarizedUntilMessageId
+        ? memoryState?.updatedAt ?? null
+        : null;
+
+      const response = await client.chat.completions.create({
+        model,
+        messages: chutesMessages,
+        max_tokens: 4096,
+        temperature: 0.5,
+      });
 
     const reply = response.choices[0].message.content;
-    if (convId && reply) {
-      await saveMessage(convId, "assistant", reply);
+    const cleanedReply = reply
+      ? reply.replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/<think>[\s\S]*$/gi, "").trim()
+      : reply;
+
+    if (convId && cleanedReply) {
+      await saveMessage(convId, "assistant", cleanedReply);
     }
 
-    return NextResponse.json({ 
-      reply: reply,
-      subnetID: "subnet-64",
-      conversationId: convId
-    });
+    if (convId && lastMessage?.content) {
+      // Fire-and-forget Phase 1b summarization (cursor + lock + budget)
+      void maybeSummarizeConversationPhase1({
+        chutesClient: client,
+        openaiClient: openaiClient,
+        conversationId: convId,
+        newestUserMessage: { content: lastMessage.content },
+      });
+    }
 
+    // Persist sparkline point (fire-and-forget).
+    if (convId) {
+      void appendSparklinePoint(convId, Math.round(contextMetrics.contextSizeChars / 4));
+    }
+    const sparklineHistory = memoryState?.sparklineHistory ?? [];
+
+    return NextResponse.json({
+      reply,
+      subnetID: "subnet-64",
+      conversationId: convId,
+      contextMetadata: {
+        contextSizeChars: contextMetrics.contextSizeChars,
+        contextLimitChars: contextMetrics.contextLimitChars,
+        healthPct: contextMetrics.healthPct,
+        lastSummarizedAt,
+        sparklineHistory,
+      },
+    });
   } catch (error) {
     console.error("Chutes API Error:", error);
     return NextResponse.json(
-      { error: "Failed to fetch response from Chutes." }, 
+      { error: "Failed to fetch response from Chutes." },
       { status: 500 }
     );
   }
 }
+

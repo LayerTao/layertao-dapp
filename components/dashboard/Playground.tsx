@@ -42,14 +42,14 @@ import { useAppKit } from "@reown/appkit/react";
 // --- PRE-FORMATTED MODEL LIST ---
 const availableModels = [
   { id: "Qwen/Qwen3-32B-TEE", company: "Qwen", name: "Qwen3-32B-TEE" },
-  { id: "openai/gpt-oss-120b-TEE", company: "OpenAI", name: "gpt-oss-120b-TEE" },
-  { id: "deepseek-ai/DeepSeek-V3.1-TEE", company: "DeepSeek", name: "DeepSeek-V3.1-TEE" },
+  // { id: "openai/gpt-oss-120b-TEE", company: "OpenAI", name: "gpt-oss-120b-TEE" },
+  // { id: "deepseek-ai/DeepSeek-V3.1-TEE", company: "DeepSeek", name: "DeepSeek-V3.1-TEE" },
   { id: "deepseek-ai/DeepSeek-V3.2-TEE", company: "DeepSeek", name: "DeepSeek-V3.2-TEE" },
-  { id: "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE", company: "Moonshot AI", name: "Qwen3-235B-A22B-Instruct-2507-TEE" },
+  // { id: "Qwen/Qwen3-235B-A22B-Instruct-2507-TEE", company: "Moonshot AI", name: "Qwen3-235B-A22B-Instruct-2507-TEE" },
   { id: "MiniMaxAI/MiniMax-M2.5-TEE", company: "MiniMax", name: "MiniMax-M2.5-TEE" },
   { id: "zai-org/GLM-5-Turbo", company: "Chutes AI", name: "zai-org/GLM-5-Turbo" },
-  { id: "tngtech/DeepSeek-TNG-R1T2-Chimera-TEE", company: "Chutes AI", name: "tngtech/DeepSeek-TNG-R1T2-Chimera-TEE" },
-  { id: "Qwen/Qwen3-Coder-Next-TEE", company: "Qwen", name: "Qwen/Qwen3-Coder-Next-TEE" },
+  // { id: "tngtech/DeepSeek-TNG-R1T2-Chimera-TEE", company: "Chutes AI", name: "tngtech/DeepSeek-TNG-R1T2-Chimera-TEE" },
+  // { id: "Qwen/Qwen3-Coder-Next-TEE", company: "Qwen", name: "Qwen/Qwen3-Coder-Next-TEE" },
   ];
 
 // --- HELPER FUNCTION TO PARSE <think> TAGS ---
@@ -88,13 +88,31 @@ export function Playground() {
   const [sizeWarning, setSizeWarning] = useState(false);
   const [chatDropdownOpen, setChatDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [newChatCounter, setNewChatCounter] = useState(0);
+  const [contextMetrics, setContextMetrics] = useState<{
+    contextSizeChars: number;
+    contextLimitChars: number;
+    healthPct: number;
+    lastSummarizedAt?: string | null;
+    sparklineHistory?: number[];
+  } | null>(null);
+
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
-    scrollToBottom();
+    // Only auto-scroll if user is already near the bottom.
+    // During streaming, users can scroll up to read without being yanked back.
+    const container = messagesContainerRef.current;
+    if (container) {
+      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+      if (isNearBottom) {
+        scrollToBottom();
+      }
+    }
   }, [messages]);
 
   const { isConnected,address} = useAccount();
@@ -138,11 +156,42 @@ export function Playground() {
   const loadConversation = async (convId: string) => {
     try {
       setIsHistoryLoading(true);
+
+      // Fetch context state FIRST so sparkline history is set before card remounts.
+      const ctxRes = await fetch(`/api/chat/context-state?conversationId=${encodeURIComponent(convId)}`);
+      let ctxData: any = null;
+      if (ctxRes.ok) {
+        ctxData = await ctxRes.json();
+      }
+
       const res = await fetch(`/api/chat/history?conversationId=${convId}`);
       if (res.ok) {
         const data = await res.json();
+
+        // Set metrics BEFORE conversationId so card mounts with correct sparkline.
+        if (ctxData && ctxData.contextSizeChars !== undefined) {
+          setContextMetrics(ctxData);
+        }
+
         setConversationId(convId);
         setMessages(data.messages || []);
+
+        // Lazy-load images for messages that have them (avoided in history fetch).
+        const msgs: any[] = data.messages || [];
+        for (const m of msgs) {
+          if (m.hasImage && !m.image && m.id) {
+            fetch(`/api/chat/message-image?id=${encodeURIComponent(m.id)}`)
+              .then(r => r.json())
+              .then(imgData => {
+                if (imgData.image) {
+                  setMessages((prev: any[]) => prev.map(pm =>
+                    pm.id === m.id ? { ...pm, image: imgData.image } : pm
+                  ));
+                }
+              })
+              .catch(() => {});
+          }
+        }
       }
     } catch (e) {
       console.error("Failed to load conversation", e);
@@ -171,6 +220,8 @@ export function Playground() {
   // Start a new chat
   const handleNewChat = () => {
     clearCurrentChat();
+    setContextMetrics(null);
+    setNewChatCounter((c) => c + 1);
     setChatDropdownOpen(false);
   };
 
@@ -288,14 +339,13 @@ export function Playground() {
         setRoutedSubnet("subnet-66");
       }
 
-      // Build messages for API — inject routing context when an image is attached
-      // so the unified router knows to route to Bitmind, without showing it in the chat.
-      const apiMessages = newMessages.map(({ role, content }) => ({ role, content }));
+      // Phase 1: do NOT send full conversation history. Send only the new user message.
+      // Keep existing image-injection behavior for router routing purposes by modifying only the new message.
+      let messageContentToSend = displayContent;
       if (hasImage && !hasText) {
-        apiMessages.push({ role: "user", content: "Check if this image is AI-generated or real" });
+        messageContentToSend = "Check if this image is AI-generated or real";
       } else if (hasImage && hasText) {
-        const lastUserIdx = apiMessages.length - 1;
-        apiMessages[lastUserIdx].content = `[Image attached for verification] ${apiMessages[lastUserIdx].content}`;
+        messageContentToSend = `[Image attached for verification] ${displayContent}`;
       }
 
       let res: Response;
@@ -310,10 +360,10 @@ export function Playground() {
           model: selectedModel,
           walletAddress: address,
           conversationId: conversationId,
-          messages: [
-            { role: "system", content: "You are a helpful AI assistant." },
-            ...apiMessages
-          ]
+          message: {
+            role: "user",
+            content: messageContentToSend,
+          },
         };
         if (imageToSend) body.image = imageToSend;
         res = await fetch(endpoint, {
@@ -351,6 +401,29 @@ export function Playground() {
                   setMessages((prev) => [...prev, { role: "assistant", content: "", image: data.imageBase64 }]);
                   setRoutingStep('received');
                   setTimeout(() => setRoutingStep('idle'), 5000);
+                } else if (data.type === "context_metadata") {
+                  setContextMetrics({
+                    contextSizeChars: data.contextSizeChars,
+                    contextLimitChars: data.contextLimitChars,
+                    healthPct: data.healthPct,
+                    lastSummarizedAt: data.lastSummarizedAt,
+                    sparklineHistory: data.sparklineHistory,
+                  });
+                } else if (data.type === "token" && data.text) {
+                  setIsLoading(false); // stop spinner on first token — streaming has begun
+                  setRoutingStep('received');
+                  setMessages((prev) => {
+                    const copy = [...prev];
+                    const last = copy[copy.length - 1];
+                    if (last && last.role === "assistant" && !last.image) {
+                      copy[copy.length - 1] = { ...last, content: last.content + data.text };
+                    } else {
+                      copy.push({ role: "assistant", content: data.text });
+                    }
+                    return copy;
+                  });
+                } else if (data.type === "content_done") {
+                  setTimeout(() => setRoutingStep('idle'), 2000);
                 } else if (data.type === "content" && data.reply) {
                   setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
                   setRoutingStep('received');
@@ -370,6 +443,10 @@ export function Playground() {
         // Capture conversationId from non-streaming API responses
         if (data.conversationId && !conversationId) {
           handleNewConversationId(data.conversationId);
+        }
+        // Capture context metrics from non-streaming API responses
+        if (data.contextMetadata) {
+          setContextMetrics(data.contextMetadata);
         }
         if (data.imageBase64) {
           setRoutingStep('received');
@@ -726,7 +803,15 @@ export function Playground() {
       </section>
 
       {/* Nexus Persistent Context Layer — UI mockup, not wired to live context state */}
-      <NexusContextCard />
+      <NexusContextCard
+        key={conversationId ?? `new-${newChatCounter}`}
+        contextSizeChars={contextMetrics?.contextSizeChars ?? 0}
+        contextLimitChars={contextMetrics?.contextLimitChars ?? 0}
+        healthPct={contextMetrics?.healthPct ?? 100}
+        lastSummarizedAt={contextMetrics?.lastSummarizedAt}
+        sparklineHistory={contextMetrics?.sparklineHistory}
+        conversationId={conversationId}
+      />
 
       {/* Workspace Grid */}
       <section className="grid gap-6 lg:grid-cols-[1fr_300px] xl:grid-cols-[1fr_340px]">
@@ -895,7 +980,7 @@ export function Playground() {
                 </div>
               ) : null}
 
-              <div className="w-full h-full p-6 overflow-y-auto z-10 flex flex-col gap-4">
+              <div ref={messagesContainerRef} className="w-full h-full p-6 overflow-y-auto z-10 flex flex-col gap-4">
                 {messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full gap-3 text-center opacity-40">
                     <Network className="h-10 w-10 text-muted-foreground mb-1" />

@@ -1,47 +1,71 @@
-// app/api/chat/route.ts
+// app/api/chat/unified/route.ts
 
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
-// import { availableModels } from "../../../lib/utils";
 import { tools } from "@/lib/utils";
-import { createConversation, saveMessage, updateConversationSummary, supabase } from "@/lib/supabase";
+import { createConversation, getConversationMemoryState, saveMessage, supabase, appendSparklinePoint } from "@/lib/supabase";
+import { computeKeptTailPhase1, maybeSummarizeConversationPhase1, KEPT_TOKEN_BUDGET, computeContextMetrics, getModelContextLimitTokens } from "@/lib/chatMemoryPhase1";
 
-// Router (OpenAI)
-const routerClient = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const routerClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Chutes subnet
 const chutesClient = new OpenAI({
   apiKey: process.env.CHUTES_API_KEY,
   baseURL: process.env.CHUTES_BASE_URL,
 });
 
-async function callChutes(messages: OpenAI.Chat.ChatCompletionMessageParam[], model: string) {
-  // console.log("Calling Chutes with model:", model);
-  // console.log("Messages:", messages);
-  const response = await chutesClient.chat.completions.create({
-    model: model,
+async function streamChutes(
+  messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  model: string,
+  onChunk: (delta: string) => void,
+): Promise<string> {
+  const stream = await chutesClient.chat.completions.create({
+    model,
     messages,
-    max_tokens: 1000,
+    max_tokens: 4096,
     temperature: 0.5,
+    stream: true,
   });
 
-  return response.choices[0].message.content;
+  let fullContent = "";
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta?.content;
+    if (delta) {
+      fullContent += delta;
+      onChunk(delta);
+    }
+  }
+
+  return fullContent;
 }
 
 async function callImageGen(prompt: string) {
-  const response = await fetch(
-    "https://chutes-z-image-turbo.chutes.ai/generate",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.CHUTES_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ prompt }),
-    }
-  );
+  const apiKey = process.env.CHUTES_API_KEY;
+  if (!apiKey) throw new Error("Missing CHUTES_API_KEY for image generation");
+
+  const payload = {
+    seed: Math.floor(Math.random() * 1000000),
+    shift: 3,
+    width: 1024,
+    height: 1024,
+    prompt,
+    guidance_scale: 0,
+    max_sequence_length: 512,
+    num_inference_steps: 9,
+  };
+
+  const response = await fetch("https://vonkaiser-z-image-turbo.chutes.ai/generate", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => "");
+    throw new Error(`Image generation failed: ${response.status} ${errText}`);
+  }
 
   const contentType = response.headers.get("content-type") || "";
 
@@ -91,109 +115,86 @@ async function callBitmind(input: string) {
   const confPercent = `${confidence}%`;
   const prefix = isVideo ? "Video" : "Image";
 
-  if (data.isAI && conf >= 90) return `**AI-Generated ${prefix}** — ${confPercent} confidence\n\nHigh-confidence detection of synthetic origin.`;
-  if (data.isAI && conf >= 70) return `**Likely AI-Generated ${prefix}** — ${confPercent} confidence\n\nMultiple indicators point to synthetic generation.`;
-  if (data.isAI) return `**Possibly AI-Generated ${prefix}** — ${confPercent} confidence\n\nResults lean synthetic, though evidence is limited.`;
-  if (!data.isAI && conf >= 90) return `**Authentic ${prefix}** — ${confPercent} confidence\n\nNo indications of AI generation detected.`;
-  if (!data.isAI && conf >= 70) return `**Likely Authentic ${prefix}** — ${confPercent} confidence\n\nThe ${isVideo ? "video" : "image"} appears genuine with minimal synthetic markers.`;
+  if (data.isAI && conf >= 90)
+    return `**AI-Generated ${prefix}** — ${confPercent} confidence\n\nHigh-confidence detection of synthetic origin.`;
+  if (data.isAI && conf >= 70)
+    return `**Likely AI-Generated ${prefix}** — ${confPercent} confidence\n\nMultiple indicators point to synthetic generation.`;
+  if (data.isAI)
+    return `**Possibly AI-Generated ${prefix}** — ${confPercent} confidence\n\nResults lean synthetic, though evidence is limited.`;
+  if (!data.isAI && conf >= 90)
+    return `**Authentic ${prefix}** — ${confPercent} confidence\n\nNo indications of AI generation detected.`;
+  if (!data.isAI && conf >= 70)
+    return `**Likely Authentic ${prefix}** — ${confPercent} confidence\n\nThe ${isVideo ? "video" : "image"} appears genuine with minimal synthetic markers.`;
   return `**Uncertain ${prefix}** — ${confPercent} confidence\n\nInconclusive result; could not be reliably classified.`;
 }
 
-async function callDesearch(query:  string, tools: string[]) {
-  // console.log("Calling DeSearch with query:", query);
-  // console.log("Available tools:", tools);
-
-    const response = await fetch(
-      `${process.env.DESEARCH_BASE_URL}/desearch/ai/search`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: process.env.DESEARCH_API_KEY!,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt: query,
-          tools: tools,
-          streaming: false,
-        }),
-      }
-    );
-
-    const data = await response.json();
-    // console.log("Subnet 2 response:", data);
-
-    return data;
-}
-
-async function summarizeBackground(convId: string, messagesToSummarize: any[], oldSummary: string) {
-  try {
-    const textToSummarize = messagesToSummarize.map(m => `${m.role}: ${m.content}`).join('\n');
-    const prompt = `Summarize the following old conversation context into a concise summary (max 150 words). Include important facts, user preferences, and key topics discussed.\n\nOld Summary: ${oldSummary}\n\nNew Messages to compress:\n${textToSummarize}`;
-    
-    const response = await chutesClient.chat.completions.create({
-      model: "Qwen/Qwen3-32B-TEE", // Fast, cheap model for summarization
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: 200,
-    });
-    
-    const newSummary = response.choices[0].message.content;
-    if (newSummary) {
-      await updateConversationSummary(convId, newSummary);
+async function callDesearch(query: string, toolsArr: string[]) {
+  const response = await fetch(
+    `${process.env.DESEARCH_BASE_URL}/desearch/ai/search`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: process.env.DESEARCH_API_KEY!,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt: query,
+        tools: toolsArr,
+        streaming: false,
+      }),
     }
-  } catch(e) {
-    console.error("Background summarization failed:", e);
-  }
+  );
+
+  return response.json();
 }
+
+// Phase 1 step 1 (correctness): DB-backed summary + newest message only.
+// Cursor/token-budget + background cursor-advancing summarization is implemented in later chunk.
 
 export async function POST(req: Request) {
   const encoder = new TextEncoder();
 
-  return new Response(new ReadableStream({
-    async start(controller) {
-      const sendChunk = (obj: Record<string, unknown>) => {
-        controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
-      };
+  return new Response(
+    new ReadableStream({
+      async start(controller) {
+        const sendChunk = (obj: Record<string, unknown>) => {
+          controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+        };
 
-      try {
-        const { messages, model, image, walletAddress, conversationId } = await req.json();
+        try {
+          const { message, model, image, walletAddress, conversationId } = await req.json();
 
-        const lastMessage = messages.at(-1);
+          const lastMessage = message
+            ? { role: "user" as const, content: String(message.content ?? "") }
+            : null;
 
-        // 1. Resolve Conversation in DB
-        let convId = conversationId;
-        let summary = "";
-        
-        if (!convId && walletAddress && lastMessage) {
-          // Auto-generate title from the first prompt
-          const contentStr = typeof lastMessage.content === 'string' ? lastMessage.content : "New Chat";
-          const title = contentStr.substring(0, 30) || "New Chat";
-          const conv = await createConversation(walletAddress, title);
-          convId = conv.id;
-          
-          // Stream the new ID back to the frontend immediately
-          sendChunk({ type: "conversation_id", conversationId: convId });
-        } else if (convId) {
-           const { data } = await supabase.from('conversations').select('summary').eq('id', convId).single();
-           if (data) summary = data.summary || "";
-        }
+          let convId: string | null = conversationId ?? null;
+          let summary = "";
+          // Load memory state once — reused by route_to_chutes below instead of refetching.
+          let memoryState: Awaited<ReturnType<typeof getConversationMemoryState>> | null = null;
 
-        /*
-        STEP 1 — Router decides which subnet to use
-        */
+          if (!convId && walletAddress && lastMessage && lastMessage.content) {
+            const title = (lastMessage.content || "").substring(0, 30) || "New Chat";
+            const conv = await createConversation(walletAddress, title);
+            convId = conv.id;
+            sendChunk({ type: "conversation_id", conversationId: convId });
+          } else if (convId) {
+            memoryState = await getConversationMemoryState(convId);
+            summary = memoryState.summary || "";
+          }
 
-        // 2. Save User Message to DB
-        if (convId && lastMessage) {
-           await saveMessage(convId, "user", lastMessage.content, image);
-        }
-
-        const routerResponse =
-          await routerClient.chat.completions.create({
+          // Save user message and call router in parallel — they're independent.
+          let newSavedUserMessageId: string | null = null;
+          const [savedMsg, routerResponse] = await Promise.all([
+            convId && lastMessage
+              ? saveMessage(convId, "user", lastMessage.content, image)
+              : Promise.resolve(null),
+            routerClient.chat.completions.create({
             model: "gpt-4o-mini",
-
             messages: [
               {
-      role: "system",
-      content: `You are a request router. NEVER answer users directly. Always return a tool call.
+                role: "system",
+                content: `You are a request router. NEVER answer users directly. Always return a tool call.
 
 DEFAULT:
 - Route most requests to "route_to_chutes".
@@ -226,147 +227,179 @@ Use when the user asks about:
 - Specific people, products, or companies (recent info)
 - Anything your training data cannot reliably answer
 
-TOOL SELECTION (pick only what fits — never include all):
-- "web"         → broad facts, news, general queries — almost always include
-- "reddit"      → opinions, recommendations, community experience
-- "twitter"     → breaking news, trends, real-time reactions
-- "youtube"     → tutorials, how-to, video content
-- "arxiv"       → academic, scientific, or ML research
-- "hackernews"  → tech news, dev/startup discussions
-- "wikipedia"   → definitions, history, established facts
-
-Always set "query" to a clean, concise search-optimized version of the user's question.
-
-WHEN TO USE "route_to_chutes":
-
-Use for everything else. Select the best model based on the task:
-- Coding / technical      → DeepSeek models
-- Creative / conversational → high-capability creative models
-- General reasoning / mixed → best balanced model
-
-Use ONLY models from the provided list.
-Pass the EXACT model id in the "model" field. Never leave it empty.
-
 HARD RULES:
 - Never generate a user-facing answer.
 - Never invent model names.
-- Output must always be a valid tool call.
-- When in doubt between chutes and desearch → prefer desearch if recency matters, chutes otherwise.`,
-    },
-              lastMessage,
+- Output must always be a valid tool call.`,
+              },
+              ...(lastMessage ? [lastMessage] : []),
             ],
             tools,
             tool_choice: "auto",
             temperature: 0,
-          });
+          }),
+        ]);
 
+        newSavedUserMessageId = savedMsg?.id ?? null;
 
-        const toolCall =
-          routerResponse.choices[0].message.tool_calls?.[0];
+          const toolCall = routerResponse.choices[0].message.tool_calls?.[0];
+          if (!toolCall) {
+            sendChunk({ error: "No routing decision made." });
+            controller.close();
+            return;
+          }
+          if (toolCall.type !== "function") {
+            sendChunk({ error: "Unsupported tool call type." });
+            controller.close();
+            return;
+          }
 
-        if (!toolCall) {
-          sendChunk({ error: "No routing decision made." });
-          controller.close();
-          return;
-        }
+          const subnetMap: Record<string, string> = {
+            route_to_chutes: "subnet-64",
+            route_to_desearch: "subnet-22",
+            route_to_imagegen: "subnet-65",
+            route_to_bitmind: "subnet-66",
+          };
 
-        if (toolCall.type !== "function") {
-          sendChunk({ error: "Unsupported tool call type." });
-          controller.close();
-          return;
-        }
+          const subnetID = subnetMap[toolCall.function.name] || "subnet-64";
+          sendChunk({ type: "routing", subnetID });
 
-        const subnetMap: Record<string, string> = {
-          route_to_chutes: "subnet-64",
-          route_to_desearch: "subnet-22",
-          route_to_imagegen: "subnet-65",
-          route_to_bitmind: "subnet-66",
-        };
-        const subnetID = subnetMap[toolCall.function.name] || "subnet-64";
-        
-        // IMMEDIATE SEND: Broadcast the chosen subnet
-        sendChunk({ type: "routing", subnetID });
+          const args = JSON.parse(toolCall.function.arguments);
 
+          let result: any;
 
-        const args = JSON.parse(
-          toolCall.function.arguments
-        );
-    
+          if (toolCall.function.name === "route_to_chutes") {
+            const sysPrompt = summary
+              ? `You are a helpful AI assistant.\n\nPrevious Conversation Summary:\n${summary}`
+              : "You are a helpful AI assistant.";
 
-        let result;
-        let messagesForSubnet = messages;
+            // Reconstruct unsummarized kept-tail and send as real chat messages.
+            // Also dedupe so the newest user message appears exactly once.
+            const summarizedUntilMessageId = memoryState?.summarizedUntilMessageId ?? null;
 
-        // Context Window Management exclusively for Chutes
-        if (toolCall.function.name === "route_to_chutes") {
-           const WINDOW_SIZE = 20;
-           const userAssistMsgs = messages.filter((m: any) => m.role !== 'system');
-           const msgsToKeep = userAssistMsgs.slice(-WINDOW_SIZE);
-           const msgsToSummarize = userAssistMsgs.slice(0, -WINDOW_SIZE);
+            const { keptTailOldestFirst } = await computeKeptTailPhase1({
+              conversationId: convId!,
+              summarizedUntilMessageId,
+              keptTokenBudget: KEPT_TOKEN_BUDGET,
+            });
 
-           if (msgsToSummarize.length > 0 && convId) {
-             // Non-blocking background summarization
-             summarizeBackground(convId, msgsToSummarize, summary);
-           }
+            // Dedupe by id: exclude the newest saved user message (inserted row id) from kept-tail.
+            const keptTailWithoutNewest = newSavedUserMessageId
+              ? keptTailOldestFirst.filter((m) => m.id !== newSavedUserMessageId)
+              : keptTailOldestFirst;
 
-           let sysPrompt = "You are a helpful AI assistant.";
-           if (summary) {
-             sysPrompt += `\n\nPrevious Conversation Summary:\n${summary}`;
-           }
+            const chutesMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+              { role: "system" as const, content: sysPrompt },
+              ...keptTailWithoutNewest
+                .filter((m: { content: string | null }) => (m.content ?? "").trim().length > 0)
+                .map((m: { role: "user" | "assistant"; content: string | null }) => ({
+                  role: m.role,
+                  content: m.content as string,
+                })),
+              ...(lastMessage
+                ? ([{ role: "user" as const, content: lastMessage.content }] as any)
+                : []),
+            ];
 
-           messagesForSubnet = [
-             { role: 'system', content: sysPrompt },
-             ...msgsToKeep
-           ];
-        }
+            const modelName =
+              typeof args.model === "string" && args.model.trim().length > 0
+                ? args.model
+                : "Qwen/Qwen3-32B-TEE";
+                // Compute total prompt chars once — reused for logging, metrics, sparkline.
+                const totalPromptChars = chutesMessages.reduce(
+                  (sum: number, m: any) => sum + (typeof m.content === "string" ? m.content.length : 0),
+                  0,
+                );
 
-        switch (toolCall.function.name) {
-          case "route_to_chutes":
-            result = await callChutes(
-              messagesForSubnet,
-              args.model
-            );
-            if (convId && result) await saveMessage(convId, "assistant", result);
-            break;
+                console.log("[unified] chutesMessages order check:", JSON.stringify(chutesMessages.map((m: any) => ({
+                  role: m.role,
+                  preview: typeof m.content === "string" ? m.content.substring(0, 60) : "",
+                }))))
+                console.log("[unified] CONTEXT SIZE:", JSON.stringify({
+                  totalChars: totalPromptChars,
+                  estTokens: Math.round(totalPromptChars / 4),
+                  msgCount: chutesMessages.length,
+                  hasSummary: summary.length > 0,
+                  summaryPreview: summary.substring(0, 80),
+                }))
 
-          case "route_to_desearch":
-            const desearchResult = await callDesearch(
-              lastMessage?.content,
-              args.tools
-            );
+                const modelLimit = getModelContextLimitTokens(modelName);
+                const contextMetrics = computeContextMetrics(totalPromptChars, modelLimit);
+                // Only report summarization timestamp if cursor exists (summarization has run).
+                const lastSummarizedAt = (memoryState?.summarizedUntilMessageId)
+                  ? memoryState?.updatedAt ?? null
+                  : null;
+                // Persist sparkline point (fire-and-forget).
+                if (convId) {
+                  void appendSparklinePoint(convId, Math.round(contextMetrics.contextSizeChars / 4));
+                }
+                const sparklineHistory = memoryState?.sparklineHistory ?? [];
+
+                sendChunk({
+                  type: "context_metadata",
+                  contextSizeChars: contextMetrics.contextSizeChars,
+                  contextLimitChars: contextMetrics.contextLimitChars,
+                  healthPct: contextMetrics.healthPct,
+                  lastSummarizedAt,
+                  sparklineHistory,
+                });
+
+            result = await streamChutes(chutesMessages, modelName, (delta) => {
+              sendChunk({ type: "token", text: delta });
+            });
+            sendChunk({ type: "content_done" });
+          } else if (toolCall.function.name === "route_to_desearch") {
+            const prompt = String(lastMessage?.content ?? "");
+            const desearchResult = await callDesearch(prompt, args.tools);
             result = desearchResult?.completion;
-            if (convId && result) await saveMessage(convId, "assistant", result);
-            break;
-
-          case "route_to_imagegen":
-            result = await callImageGen(lastMessage?.content);
+          } else if (toolCall.function.name === "route_to_imagegen") {
+            const prompt = String(lastMessage?.content ?? "");
+            result = await callImageGen(prompt);
             if (convId && result) await saveMessage(convId, "assistant", "", result);
             sendChunk({ type: "image", imageBase64: result });
             controller.close();
             return;
-
-          case "route_to_bitmind":
-            result = await callBitmind(image || lastMessage?.content);
-            if (convId && result) await saveMessage(convId, "assistant", result);
-            break;
-
-          default:
+          } else if (toolCall.function.name === "route_to_bitmind") {
+            const input = String(image || (lastMessage?.content ?? ""));
+            result = await callBitmind(input);
+          } else {
             sendChunk({ error: "Unknown subnet." });
             controller.close();
             return;
+          }
+
+          // For imagegen we returned early above, so any other branch should be persisted.
+          if (convId && result) {
+            const cleanedResult = String(result)
+              .replace(/<think>[\s\S]*?<\/think>/gi, "")
+              .replace(/<think>[\s\S]*$/gi, "")   // unclosed block from truncated output
+              .trim();
+            await saveMessage(convId, "assistant", cleanedResult);
+
+
+            // Fire-and-forget Phase 1b summarization (cursor + lock + budget)
+            void maybeSummarizeConversationPhase1({
+              chutesClient: chutesClient,
+              openaiClient: routerClient,
+              conversationId: convId,
+              newestUserMessage: { content: lastMessage?.content ?? "" },
+            });
+          }
+
+          // route_to_chutes streams via tokens — skip duplicate content chunk.
+          if (toolCall.function.name !== "route_to_chutes") {
+            sendChunk({ type: "content", reply: result });
+          }
+          controller.close();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : JSON.stringify(error);
+          console.error("Router Error:", message, error);
+          sendChunk({ error: `Failed to route request: ${message}` });
+          controller.close();
         }
-
-        //  Send the final AI output
-        sendChunk({ type: "content", reply: result });
-        controller.close();
-
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error("Router Error:", message);
-        sendChunk({ error: `Failed to route request: ${message}` });
-        controller.close();
-      }
-    }
-  }), {
-    headers: { "Content-Type": "application/x-ndjson" }
-  });
+      },
+    }),
+    { headers: { "Content-Type": "application/x-ndjson" } }
+  );
 }
+

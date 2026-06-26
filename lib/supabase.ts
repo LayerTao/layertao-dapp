@@ -106,10 +106,152 @@ export async function updateConversationSummary(conversationId: string, summary:
     .eq('id', conversationId)
     .select()
     .single();
-    
+
   if (error) {
     console.error("Failed to update conversation summary:", error);
     return null;
   }
   return data;
 }
+
+export async function getConversationMemoryState(conversationId: string): Promise<{
+  summary: string;
+  summarizedUntilMessageId: string | null;
+  summarizing: boolean;
+  updatedAt: string;
+  sparklineHistory: number[];
+}> {
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('summary, summarized_until_message_id, summarizing, updated_at, sparkline_history')
+    .eq('id', conversationId)
+    .single();
+
+  if (error) throw error;
+
+  return {
+    summary: data?.summary || '',
+    summarizedUntilMessageId: data?.summarized_until_message_id ?? null,
+    summarizing: Boolean(data?.summarizing),
+    updatedAt: data?.updated_at ? new Date(data.updated_at).toISOString() : new Date().toISOString(),
+    sparklineHistory: Array.isArray(data?.sparkline_history) ? data.sparkline_history as number[] : [],
+  };
+}
+
+export async function tryAcquireConversationSummarizingLock(conversationId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('try_acquire_conversation_summarizing_lock', {
+    p_conversation_id: conversationId,
+  });
+
+  if (error) throw error;
+
+  // supabase-js returns rpc scalar as-is
+  return Boolean(data);
+}
+
+
+
+
+export async function releaseConversationSummarizingLock(conversationId: string): Promise<void> {
+  const { error } = await supabase
+    .from('conversations')
+    .update({ summarizing: false, updated_at: new Date().toISOString() })
+    .eq('id', conversationId);
+
+  if (error) throw error;
+}
+
+export async function updateConversationSummaryAndAdvanceCursor(params: {
+  conversationId: string;
+  newSummary: string;
+  lastSummarizedMessageId: string;
+}): Promise<void> {
+  const { error } = await supabase
+    .from('conversations')
+    .update({
+      summary: params.newSummary,
+      summarized_until_message_id: params.lastSummarizedMessageId,
+      summarizing: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', params.conversationId);
+
+  if (error) throw error;
+}
+
+/**
+ * Cursor-based message fetch:
+ * - Resolves the cursor UUID to a created_at timestamp.
+ * - Returns messages where created_at > cursor_created_at (if cursor provided).
+ * - Ordered by created_at oldest -> newest for stable chronological token-budget walking.
+ *
+ * IMPORTANT: messages.id is UUIDv4 (random byte order). We MUST NOT order or filter
+ * by id for chronology — UUIDv4 sort order is unrelated to insertion time. Use
+ * created_at instead for all chronological operations.
+ */
+export async function getConversationMessagesAfterCursor(params: {
+  conversationId: string;
+  summarizedUntilMessageId: string | null;
+  limit?: number;
+}): Promise<Array<{ id: string; role: 'user' | 'assistant'; content: string | null; image: string | null; created_at?: string }>> {
+  const { conversationId, summarizedUntilMessageId, limit = 200 } = params;
+
+  // Resolve the cursor UUID to its created_at timestamp so we can do a correct
+  // chronological boundary filter.  UUIDv4 byte order != time order.
+  let cursorCreatedAt: string | null = null;
+  if (summarizedUntilMessageId) {
+    const { data: cursorMsg } = await supabase
+      .from('messages')
+      .select('created_at')
+      .eq('id', summarizedUntilMessageId)
+      .single();
+    cursorCreatedAt = cursorMsg?.created_at ?? null;
+  }
+
+  let query = supabase
+    .from('messages')
+    .select('id, role, content, created_at')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: true })
+    .limit(limit);
+
+  if (cursorCreatedAt) {
+    query = query.gt('created_at', cursorCreatedAt);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return (data ?? []) as any;
+}
+
+/**
+ * Append a token-count point to the conversation's sparkline history.
+ * Truncates to last 20 entries. Called on each chat response.
+ */
+export async function appendSparklinePoint(
+  conversationId: string,
+  tokens: number,
+): Promise<void> {
+  // Use a raw SQL RPC or two-step read-modify-write.
+  // Read current history, append, truncate, write back.
+  const { data: conv } = await supabase
+    .from('conversations')
+    .select('sparkline_history')
+    .eq('id', conversationId)
+    .single();
+
+  const history: number[] = Array.isArray(conv?.sparkline_history)
+    ? conv.sparkline_history as number[]
+    : [];
+  history.push(tokens);
+  const trimmed = history.length > 20 ? history.slice(history.length - 20) : history;
+
+  const { error } = await supabase
+    .from('conversations')
+    .update({ sparkline_history: trimmed })
+    .eq('id', conversationId);
+
+  if (error) console.error("[appendSparklinePoint] failed:", error);
+}
+

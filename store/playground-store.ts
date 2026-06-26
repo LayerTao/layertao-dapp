@@ -4,6 +4,8 @@ export type Message = {
   role: "user" | "assistant";
   content: string;
   image?: string;
+  hasImage?: boolean;
+  id?: string; // from history, used for lazy image loading
 };
 
 export type Conversation = {
