@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { tools } from "@/lib/utils";
-import { createConversation, getConversationMemoryState, saveMessage, supabase, appendSparklinePoint } from "@/lib/supabase";
+import { createConversation, getConversationMemoryState, saveMessage, supabase, appendSparklinePoint, getRecentUserMessagesForRouting } from "@/lib/supabase";
 import { computeKeptTailPhase1, maybeSummarizeConversationPhase1, KEPT_TOKEN_BUDGET, computeContextMetrics, getModelContextLimitTokens } from "@/lib/chatMemoryPhase1";
 
 const routerClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -185,6 +185,17 @@ export async function POST(req: Request) {
             summary = memoryState.summary || "";
           }
 
+          // Fetch recent user messages for routing context (lightweight, ~30ms).
+          const recentUserMsgs = convId
+            ? await getRecentUserMessagesForRouting(convId, 3)
+            : [];
+
+          // Build context from previous user messages for smarter routing.
+          const routingContext = recentUserMsgs.length > 0
+            ? "\n\nPREVIOUS USER MESSAGES (context only — understand the topic, then route the latest message below):\n" +
+              recentUserMsgs.map((m, i) => `${i + 1}. "${m}"`).join("\n")
+            : "";
+
           // Save user message and call router in parallel — they're independent.
           let newSavedUserMessageId: string | null = null;
           const [savedMsg, routerResponse] = await Promise.all([
@@ -196,7 +207,7 @@ export async function POST(req: Request) {
             messages: [
               {
                 role: "system",
-                content: `You are a request router. NEVER answer users directly. Always return a tool call.
+                content: `You are a request router. NEVER answer users directly. Always return a tool call.${routingContext}
 
 DEFAULT:
 - Route most requests to "route_to_chutes".

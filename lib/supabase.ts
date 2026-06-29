@@ -255,3 +255,27 @@ export async function appendSparklinePoint(
   if (error) console.error("[appendSparklinePoint] failed:", error);
 }
 
+/**
+ * Fetch last N user messages (oldest-first) for routing context.
+ * Lightweight — only fetches content, no images or assistant replies.
+ */
+export async function getRecentUserMessagesForRouting(
+  conversationId: string,
+  limit: number = 3,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('content')
+    .eq('conversation_id', conversationId)
+    .eq('role', 'user')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("[getRecentUserMessagesForRouting] failed:", error);
+    return [];
+  }
+
+  return (data ?? []).reverse().map(m => m.content).filter(Boolean);
+}
+
