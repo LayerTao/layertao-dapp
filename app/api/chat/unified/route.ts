@@ -1,5 +1,7 @@
 // app/api/chat/unified/route.ts
 
+export const dynamic = "force-dynamic";
+
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { tools } from "@/lib/utils";
@@ -399,7 +401,7 @@ HARD RULES:
         }
       },
     }),
-    { headers: { "Content-Type": "application/x-ndjson" } }
+    { headers: { "Content-Type": "application/x-ndjson", "Cache-Control": "no-cache, no-transform", "X-Content-Type-Options": "nosniff", "X-Accel-Buffering": "no", "Content-Encoding": "identity" } }
   );
 }
 
