@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     const imageBase64 = `data:${contentType};base64,${base64}`;
 
     if (convId && imageBase64) {
-      await saveMessage(convId, "assistant", "", imageBase64);
+      await saveMessage(convId, "assistant", "Here is the generated image:", imageBase64);
     }
 
     return NextResponse.json({

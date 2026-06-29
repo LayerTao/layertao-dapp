@@ -368,7 +368,7 @@ HARD RULES:
           } else if (toolCall.function.name === "route_to_imagegen") {
             const prompt = String(lastMessage?.content ?? "");
             result = await callImageGen(prompt);
-            if (convId && result) await saveMessage(convId, "assistant", "", result);
+            if (convId && result) await saveMessage(convId, "assistant", "Here is the generated image:", result);
             sendChunk({ type: "image", imageBase64: result });
             controller.close();
             return;
