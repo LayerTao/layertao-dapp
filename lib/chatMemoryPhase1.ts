@@ -9,7 +9,7 @@
   } from "./supabase";
   
   /** Token budget for kept-tail (unsummarized messages sent raw to chat model). */
-  export const KEPT_TOKEN_BUDGET = 4000;
+  export const KEPT_TOKEN_BUDGET = 5000;
 
   /**
    * Resolve a model name to its approximate context-window token limit.
